@@ -1,0 +1,80 @@
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <script
+        src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+        crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/perfect-scrollbar@1.4.0/dist/perfect-scrollbar.min.js"></script>
+        <link 
+        href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" 
+        rel="stylesheet" 
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" 
+        crossorigin="anonymous">
+        <link rel="stylesheet" type="text/css" href="main.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/perfect-scrollbar@1.4.0/css/perfect-scrollbar.css">
+    </head>
+    <body>
+        <div class="container">
+           <div class="row">
+                <div class="col-sm-7">
+                    <form id="msgForm">
+                        <div class="form-group">
+                            <label for="msgTextArea"><h3 class="alert alert-secondary">Message</h3></label>
+                            <textarea class="form-control" id="msgTextArea" rows="3" placeholder="Hello World!"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Message</button>
+                    </form>
+                    <h3 class="alert alert-secondary">Direct Message with:</h3>
+                    <p>Double click a peer to interact privately with it</p>
+                    <ul class="list-group users">
+                    </ul>
+                    <form id="peersterForm">
+                        <div class="form-group">
+                            <label for="peersterInput"><h3 class="alert alert-secondary">Peerster address</h3></label>
+                            <input type="text" class="form-control" id="peersterInput" placeholder="127.0.0.1:7007">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Peerster</button>
+                    </form>
+                    <form id="fileForm">
+                        <input id="file" type="file" class="btn btn-outline-primary"/>
+                        <input type="submit" value="Upload File" name="submit" class="btn btn-primary"/>
+                    </form>
+                </div>
+                <div class="col-sm-5 flex-column">
+                    <div class="flex-item-1">
+                        <h3 class="alert alert-secondary">Peer ID: <span id="peerID"></span></h3>
+                    </div>
+                    <div class="flex-item-3">
+                        <h3 class="alert alert-secondary">Messages</h3>
+                        <div class="messageBox">
+                            
+                        </div>
+                    </div>
+                    <div class="flex-item-1">
+                        <h3 class="alert alert-secondary">Peers</h3>
+                        <ul class="list-group peers">
+                        </ul>
+                    </div>
+                </div>
+           </div>
+           <div id="privateMsgModal" class="modal">
+
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <form id="privateMsgForm">
+                    <div class="form-group">
+                        <label for="privateMsgTextArea"><h3 class="alert alert-secondary">Send private message to <span id="peerName"></span></h3></label>
+                        <textarea class="form-control" id="privateMsgTextArea" rows="3" placeholder="Hello World!"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send Message</button>
+                </form>
+            </div>
+          
+          </div>
+        </div>
+
+        <script src="main.js"></script>
+    </body>
+</html>

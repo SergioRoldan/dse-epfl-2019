@@ -1,0 +1,15 @@
+Reduce Locks usage (through functions, eliminate the unnecesary, englobate) [not done]
+Clean the code (remove unnecesary lookups, etc) [not done]
+Segmentate the code [almost done]
+
+// Routing
+Exercise 1 [done]
+Exercise 2 [done]
+
+// Private msg
+Exercise 3 [done] - GUI private messages display
+
+// Files
+Exercise 4 [done] - GUI handle uploaded document
+Exercise 5 [done]
+Exercise 6 [not done]
