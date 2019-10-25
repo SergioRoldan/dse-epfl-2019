@@ -11,7 +11,7 @@ const FILESDIR = "./_SharedFiles/"
 const CHUNKSIZE = 8000
 const SHASIZE = 32
 
-func handleFile(gos *Gossiper, filename string) {
+func handleFileIndexing(gos *Gossiper, filename string) {
 	file, err := os.Open(FILESDIR + filename)
 
 	if err != nil {
@@ -52,4 +52,8 @@ func handleFile(gos *Gossiper, filename string) {
 	gos.filesIndex[fileIndex.MetaHash] = fileIndex
 
 	fmt.Println(gos.filesIndex)
+}
+
+func handleFileDownload(gos *Gossiper, msg *Message) {
+
 }

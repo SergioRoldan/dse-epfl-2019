@@ -14,6 +14,21 @@ type Message struct {
 	Request *[]byte
 }
 
+type DataRequest struct {
+	Origin string
+	Destination string
+	HopLimit uint32
+	HashValue []byte
+}
+
+type DataReply struct {
+	Origin string
+	Destination string
+	HopLimit uint32
+	HashValue []byte
+	Data []byte
+}
+
 type PrivateMessage struct {
 	Origin string
 	ID uint32
@@ -53,6 +68,8 @@ type GossipPacket struct {
 	Rumor  *RumorMessage
 	Status *StatusPacket
 	Private *PrivateMessage
+	DataRequest *DataRequest
+	DataReply *DataReply
 }
 
 // IDResponse structure with ID string
@@ -102,4 +119,5 @@ type Gossiper struct {
 	rumorsMutex *sync.Mutex
 	routingTable map[string]string
 	filesIndex map[[32]byte]FileIndex
+	downloads []chan [32]byte
 }

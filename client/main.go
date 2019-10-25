@@ -23,6 +23,7 @@ func main() {
 	dest := flag.String("dest", "", "destination for the private message; can be omitted")
 	msg := flag.String("msg", "", "message to be sent")
 	file := flag.String("file", "", "file to be indexed by the gossiper")
+	request := flag.String("request", "", "request a chunk or metafile of this hash")
 	flag.Parse()
 
 	// Resolve the address and the udp connection
@@ -50,6 +51,11 @@ func main() {
 		newmsg.Destination = dest
 	} else if *file != "" {
 		newmsg.File = file
+
+		if *request != "" {
+			req := []byte(*request)
+			newmsg.Request = &req
+		}
 	}
 
 	packetBytes, encodeErr := protobuf.Encode(newmsg)

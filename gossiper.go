@@ -250,7 +250,7 @@ func handlePrivateMsg(gos *Gossiper, msg *GossipPacket) {
 	}
 
 	// Discard the message silenty
-	if msg.Private.HopLimit == 1 {
+	if msg.Private.HopLimit == 0 {
 		return
 	}
 
@@ -272,6 +272,88 @@ func handlePrivateMsg(gos *Gossiper, msg *GossipPacket) {
 		fmt.Println("Unable to send message to unknown peer")
 	}
 }
+
+func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
+	if gos.ID == msg.DataRequest.Destination {
+		var hashVal [32]byte
+
+		copy(hashVal[:], msg.DataRequest.HashValue)
+		if _, ok := gos.filesIndex[hashVal]; ok {
+			rmr := &DataReply {
+				Origin: gos.ID,
+				Destination: msg.DataRequest.Origin,
+				HopLimit: 9,
+				HashValue: msg.DataReply.HashValue,
+				Data: gos.filesIndex[hashVal].Meta,
+			}
+
+			addr := gos.routingTable[msg.DataRequest.Origin]
+
+			if addr != "" {
+				msg := &GossipPacket{DataReply: rmr}
+
+				sendMsgTo(addr, msg, *gos)
+			} else {
+				fmt.Println("Unable to send message to unknown peer")
+			}
+			// create the thread and make the channel
+		} else {
+			// maybe use channels to notify thread that a message has arrived
+		}
+
+		return
+	}
+
+	if msg.DataRequest.HopLimit == 0 {
+		return
+	}
+
+	addr := gos.routingTable[msg.DataRequest.Destination]
+
+	if addr != "" {
+		rmr := &DataRequest {
+			Origin: msg.DataRequest.Origin,
+			Destination: msg.DataRequest.Destination,
+			HopLimit: msg.DataRequest.HopLimit -1,
+			HashValue: msg.DataRequest.HashValue,
+		}
+
+		msg := &GossipPacket{DataRequest: rmr}
+
+		sendMsgTo(addr, msg, *gos)
+	} else {
+		fmt.Println("Unable to send message to unknown peer")
+	}
+}
+
+func handleDataReply(gos *Gossiper, msg *GossipPacket) {
+	if gos.ID == msg.DataReply.Destination {
+		// do something
+		return
+	}
+
+	if msg.DataReply.HopLimit == 0 {
+		return
+	}
+
+	addr := gos.routingTable[msg.DataReply.Destination]
+
+	if addr != "" {
+		rmr := &DataReply {
+			Origin: msg.DataReply.Origin,
+			Destination: msg.DataReply.Destination,
+			HopLimit: msg.DataReply.HopLimit -1,
+			HashValue: msg.DataReply.HashValue,
+			Data: msg.DataReply.Data,
+		}
+
+		msg := &GossipPacket{DataReply: rmr}
+
+		sendMsgTo(addr, msg, *gos)
+	} else {
+		fmt.Println("Unable to send message to unknown peer")
+	}
+ }
 
 // Gossiper handler: get the message and interact accordingly
 func handleGossiperConnection(conn *net.UDPConn, gos *Gossiper) {
@@ -326,6 +408,10 @@ func handleGossiperConnection(conn *net.UDPConn, gos *Gossiper) {
 		handleStatus(addr, gos, msg)
 	} else if msg.Private != nil {
 		handlePrivateMsg(gos, msg)
+	} else if msg.DataRequest != nil {
+		handleDataRequest(gos, msg)
+	} else if msg.DataReply != nil {
+		handleDataReply(gos, msg)
 	}
 
 }
@@ -351,7 +437,11 @@ func handleClientConnection(conn *net.UDPConn, gos *Gossiper) {
 		sendNewPrivateMessage(gos, tmpMsg.Text, *tmpMsg.Destination)
 	//send the message
 	} else if tmpMsg.File != nil {
-		handleFile(gos, *tmpMsg.File);
+		if tmpMsg.Request != nil {
+			handleFileDownload(gos, tmpMsg)
+		} else {
+			handleFileIndexing(gos, *tmpMsg.File);
+		}
 	} else {
 		sendNewRumorMessage(gos, tmpMsg.Text)
 	}
