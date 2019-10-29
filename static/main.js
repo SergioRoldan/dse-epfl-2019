@@ -5,47 +5,117 @@ $(document).ready(function() {
 
     // Perfect scrollbars
     const ps1 = new PerfectScrollbar('.messageBox');
-    const ps2 = new PerfectScrollbar('.list-group');
+    const ps2 = new PerfectScrollbar('.list-group.users');
+    const ps3 = new PerfectScrollbar('.privateBox');
+    const ps4 = new PerfectScrollbar('.list-group.peers');
 
+    // Interval for private messages
+    var refreshIntervalId;
+
+    // Private modal definition
     var modal = document.getElementById("privateMsgModal");
     var clse = document.getElementsByClassName("close")[0];
 
+    // Private modal close and clear of interval
     clse.onclick = function() {
         modal.style.display = "none";
+        clearInterval(refreshIntervalId);
     }
-
     window.onclick = function(event) {
         if (event.target == modal) {
             modal.style.display = "none";
+            clearInterval(refreshIntervalId)
         }
     }
 
+    // Private modal open and interval set
     $(".users").on("dblclick", ".list-group-item", function(e) {
         name = $(e.target).text()
-        
+
         modal.style.display = "block";
+
         $("#peerName").text(name)
+        getPrivateMessages(name)
+
+        refreshIntervalId = setInterval(() => {
+            getPrivateMessages(name)
+        },  2000);
     })
 
-    $("#fileForm").submit(function(e) {
+    // Upload file submit
+    $("#uploadForm").submit(function(e) {
+
+        // Prevent default, get file and upload it
         e.preventDefault();
 
         var fileInput = document.getElementById('file');
         var file = fileInput.files[0];
         var formData = new FormData();
-        formData.append(file.name, file);
+        formData.append("upload", file);
 
         var xhr = new XMLHttpRequest();
 
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4 && xhr.status == 200) {
-                document.getElementById("file").value = null;
+                $("#processID").text("Upload successful, the file will be available on _SharedFiles folder")
+                $("#processID").removeClass().addClass("alert alert-success")
+            } else if (xhr.readyState === 4 && xhr.status != 200) {
+                $("#processID").text("Upload error, try again later")
+                $("#processID").removeClass().addClass("alert alert-danger")
             }
         }
 
-        xhr.open('POST', '/file', true);
+        xhr.open('POST', '/upload', true);
         xhr.send(formData)
+
+        fileInput.value = "";
     })
+
+    // Download submit
+    $("#downloadForm").submit(function(e) {
+
+        // Prevent default, get values, check values correctness and send ajax
+       e.preventDefault();
+
+       var actionurl = e.currentTarget.action;
+       var name = $("#downloadNameInput").val();
+       $("#downloadNameInput").val("")
+       var hash = $("#downloadHashInput").val();
+       $("#downloadHashInput").val("")
+       var peer = $("#downloadPeerInput").val();
+       $("#downloadPeerInput").val("")
+
+       $("").each(function() {
+           $(this).remove();
+       });
+1
+       if(name != "" && hash != "" && peer != "" && $(".list-group.users .list-group-item").text().indexOf(peer) != -1 && hash.length == 64 && /[A-Za-z0-9_-]*\.*[A-Za-z0-9]{3,4}/g.test(name) && /[0-9a-fA-F]+/g.test(hash)) {
+            var download = {
+                Name: name,
+                Hash: hash,
+                Peer: peer
+            };
+
+           $.ajax({
+                   url: actionurl + 'download',
+                   type: 'post',
+                   data: JSON.stringify(download),
+                   success: function(data, textStatus, request) {
+                        if(request.status == 200) {
+                            $("#processID").text("Download correctly started, the resulting file will appear on _Downloads folder")
+                            $("#processID").removeClass().addClass("alert alert-success")
+                        } else {
+                            $("#processID").text("Download error, try again later")
+                            $("#processID").removeClass().addClass("alert alert-danger")
+                        }
+                   }
+           });
+
+       } else {
+           $("<div class=\"toast\" role=\"alert\" aria-live=\"assertive\" aria-atomic=\"true\"><div class=\"toast-header\"><strong class=\"mr-auto\">Error File Download</strong><button type=\"button\" class=\"ml-2 mb-1 close\" data-dismiss=\"toast\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button></div><div class=\"toast-body\">Invalid request, the three inputs must be non-empty and follow the hints examples</div></div>").appendTo("#downloadForm");
+       }   
+
+   });
 
     // Private message submit
     $("#privateMsgForm").submit(function(e) {
@@ -120,6 +190,7 @@ $(document).ready(function() {
 
     });
 
+    // Peer submit
     $("#peersterForm").submit(function(e) {
 
          // Prevent default, get value, clean value/errors, check regex test is true and send ajax
@@ -162,12 +233,12 @@ $(document).ready(function() {
         }
     });
 
-    // Get peerster addresses and messages
+    // Get peersters, addresses and messages
     getMessages();
     getNodes();
     getUsers()
 
-    // Get new peersters and messages each two seconds
+    // Get new peersters, addresses and messages each two seconds
     setInterval(() => {
         getNodes();
         getMessages();
@@ -193,6 +264,29 @@ function getNodes() {
     });
 }
 
+// Get all private messages with the node user
+function getPrivateMessages(user) {
+    $.ajax({
+        url: window.location.href  + "private",
+        type: 'get',
+        data: { user: user },
+        success: function(data) {
+            if(data.Private == null) {
+                return
+            }            
+            $('.privateBox').html("")
+            data.Private.forEach(function(priv) {
+                let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">"+ priv.Origin +"</h5><h5 class=\"card-subtitle mb-2 text-muted\">"+ priv.HopLimit +"</h5><p class=\"card-text\">" + priv.Text + "</p></div></div>").appendTo(".privateBox")
+                if(priv.Origin != user)
+                    newmsg.addClass("mine")
+
+                $(".privateBox").scrollTop($(".privateBox")[0].scrollHeight);
+            })
+        }
+    });
+}
+
+// Get the nodes and if its new add it to the list
 function getUsers() {
     $.ajax({
         url: window.location.href  + "users",
@@ -228,7 +322,7 @@ function getMessages() {
                     nodes: []
                 }
                 
-                $(".message").each(function() {
+                $(".messageBox .message").each(function() {
                     origins.ids.push($(this).find('.card-subtitle').text())
                     origins.nodes.push($(this).find('.card-title').text())
                 })

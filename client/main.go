@@ -4,7 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
-
+	"os"
+	"encoding/hex"
 	"go.dedis.ch/protobuf"
 )
 
@@ -41,33 +42,48 @@ func main() {
 		fmt.Println("Conn err: " + connErr.Error())
 	}
 
-	// Print parameters
-	fmt.Println("Local UDP client address : " + udpConn.LocalAddr().String())
-	fmt.Println("Message to be send: " + *msg)
-	fmt.Println("Established connection to " + address)
-
+	// Create the msg with the parameters specified in the flags
 	newmsg := &Message{ Text: *msg }
+
 	if *dest != "" {
 		newmsg.Destination = dest
-	} else if *file != "" {
+	}  
+	
+	if *file != "" {
 		newmsg.File = file
 
 		if *request != "" {
-			req := []byte(*request)
-			newmsg.Request = &req
+			req, err := hex.DecodeString(*request)
+
+			if err == nil {
+				newmsg.Request = &req
+			} else {
+				fmt.Println("ERROR (Unable to decode hex hash)")
+				os.Exit(1)
+			}
 		}
 	}
 
-	packetBytes, encodeErr := protobuf.Encode(newmsg)
+	// If the flag combination is correct send the message
+	if (newmsg.Destination != nil && newmsg.File != nil && newmsg.Request != nil) ||
+	   (newmsg.Destination != nil && newmsg.File == nil && newmsg.Request == nil) ||
+	   (newmsg.Destination == nil && newmsg.File != nil && newmsg.Request == nil) ||
+	   (newmsg.Destination == nil && newmsg.File == nil && newmsg.Request == nil) {
+		   
+		packetBytes, encodeErr := protobuf.Encode(newmsg)
 
-	if encodeErr != nil {
-		fmt.Println("Encode error: " + encodeErr.Error())
-	}
+		if encodeErr != nil {
+			fmt.Println("Encode error: " + encodeErr.Error())
+		}
 
-	_, writeErr := udpConn.Write(packetBytes)
+		_, writeErr := udpConn.Write(packetBytes)
 
-	if writeErr != nil {
-		fmt.Println("Write error: " + writeErr.Error())
-	}
+		if writeErr != nil {
+			fmt.Println("Write error: " + writeErr.Error())
+		}
+	} else {
+		fmt.Println("ERROR (Bad argument combination)")
+		os.Exit(1)
+	} 
 
 }

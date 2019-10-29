@@ -5,6 +5,7 @@ import (
 	"strconv"
 )
 
+// Send a new simple message
 func sendNewSimpleMessage(gos *Gossiper, text string) {
 	msg := &GossipPacket{}
 	msg.Simple = &SimpleMessage{gos.Name, gos.address.IP.String() + ":" + strconv.Itoa(gos.address.Port), text}
@@ -14,6 +15,7 @@ func sendNewSimpleMessage(gos *Gossiper, text string) {
 	gos.peersMutex.Unlock()
 }
 
+// Send a new rumor message
 func sendNewRumorMessage(gos *Gossiper, text string) {
 	nID := 0
 	gos.statusMutex.Lock()
@@ -44,6 +46,7 @@ func sendNewRumorMessage(gos *Gossiper, text string) {
 	}
 }
 
+// Send a new private message
 func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 	rmr := &PrivateMessage{
 		Origin: gos.ID,
@@ -62,10 +65,15 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 
 	msg.Private.HopLimit -= 1
 
+	gos.routingMutex.Lock()
 	addr := gos.routingTable[destination]
+	gos.routingMutex.Unlock()
 
 	if addr != "" {
+		printPrivateClient(text, destination)
+
 		sendMsgTo(addr, msg, *gos)
+		gos.private[msg.Private.Destination] = append(gos.private[msg.Private.Destination], *msg.Private)
 	} else {
 		fmt.Println("Unable to send message to unknown peer")
 	}

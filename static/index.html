@@ -22,7 +22,7 @@
                     <form id="msgForm">
                         <div class="form-group">
                             <label for="msgTextArea"><h3 class="alert alert-secondary">Message</h3></label>
-                            <textarea class="form-control" id="msgTextArea" rows="3" placeholder="Hello World!"></textarea>
+                            <textarea class="form-control" id="msgTextArea" rows="2" placeholder="Hello World!"></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary">Send Message</button>
                     </form>
@@ -37,14 +37,30 @@
                         </div>
                         <button type="submit" class="btn btn-primary">Add Peerster</button>
                     </form>
-                    <form id="fileForm">
+                    <form id="uploadForm">
+                        <h3 class="alert alert-secondary">Upload File</h3>
                         <input id="file" type="file" class="btn btn-outline-primary"/>
                         <input type="submit" value="Upload File" name="submit" class="btn btn-primary"/>
                     </form>
+                    <form id="downloadForm">
+                        <div class="form-group">
+                            <h3 class="alert alert-secondary">Download File</h3>
+                            <label for="downloadHashInput">File Hash (SHA256):</label>
+                            <input type="text" class="form-control" id="downloadHashInput" placeholder="e75cfa893aee1ac39cc0945cd5dfe74beba31d209ddebca30a82965d8d6af2d0">
+                            <label for="downloadPeerInput">Peer Name:</label>
+                            <input type="text" class="form-control" id="downloadPeerInput" placeholder="Michela">
+                            <label for="downloadNameInput">File Name:</label>
+                            <input type="text" class="form-control" id="downloadNameInput" placeholder="test.txt">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Download File</button>
+                    </form>
                 </div>
                 <div class="col-sm-5 flex-column">
-                    <div class="flex-item-1">
+                    <div>
                         <h3 class="alert alert-secondary">Peer ID: <span id="peerID"></span></h3>
+                    </div>
+                    <div>
+                        <h3 class="alert" id="processID"></h3>
                     </div>
                     <div class="flex-item-3">
                         <h3 class="alert alert-secondary">Messages</h3>
@@ -63,6 +79,10 @@
 
             <div class="modal-content">
                 <span class="close">&times;</span>
+                <h4 class="alert alert-secondary">Messages</h4>
+                <div class="privateBox">
+                    
+                </div>
                 <form id="privateMsgForm">
                     <div class="form-group">
                         <label for="privateMsgTextArea"><h3 class="alert alert-secondary">Send private message to <span id="peerName"></span></h3></label>

@@ -1,20 +1,20 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
+// Update a routing entry and print a DSDV message if the table will be updated
 func updateRoutingEntry(addr, origin string, gos *Gossiper, print bool) {
+	gos.routingMutex.Lock()
 	gos.routingTable[origin] = addr
+	gos.routingMutex.Unlock()
 	if print {
 		printDSDV(origin, addr)
 	}
-
-	// DELETE just for debug purposes
-	fmt.Println(gos.routingTable)
 }
 
+// Send a route rumor when ticker ticks
 func routeMessage(gos *Gossiper, ticker *time.Ticker) {
 	for {
 		select {
@@ -24,6 +24,7 @@ func routeMessage(gos *Gossiper, ticker *time.Ticker) {
 	}
 }
 
+// Send a new route rumor message
 func sendRumorMsg(gos *Gossiper) {
 	nID := 0
 	gos.statusMutex.Lock()

@@ -6,7 +6,7 @@ import (
 )
 /* STRUCTS */
 
-// Message structure with Text string
+// Message structure with Text string, Destination and File *strings; and Request *[]byte
 type Message struct {
 	Text string
 	Destination *string
@@ -14,6 +14,7 @@ type Message struct {
 	Request *[]byte
 }
 
+// DataRequest structure with Origin and Destination strings, HopLimit uint32 and HashValue []byte
 type DataRequest struct {
 	Origin string
 	Destination string
@@ -21,6 +22,7 @@ type DataRequest struct {
 	HashValue []byte
 }
 
+// DataReply structure with Origin and Destination strings, HopLimit uint32; HashValue and Data []bytes
 type DataReply struct {
 	Origin string
 	Destination string
@@ -29,6 +31,7 @@ type DataReply struct {
 	Data []byte
 }
 
+// PrivateMessage structure with Origin, Destination and Text strings; HopLimit and ID uints32
 type PrivateMessage struct {
 	Origin string
 	ID uint32
@@ -85,7 +88,11 @@ type NodesResponse struct {
 // MessagesResponse structure with Rumors map[string][]RumorMessage
 type MessagesResponse struct {
 	Rumors map[string][]RumorMessage
-	Privates []PrivateMessage
+}
+
+// PrivateResponse structure with Private []PrivateMessage
+type PrivateResponse struct {
+	Private []PrivateMessage
 }
 
 // RumorAck structure with Origin string and ID uint32
@@ -94,6 +101,7 @@ type RumorAck struct {
 	ID     uint32
 }
 
+// FileIndex structure with Name string, Size int64, Meta []byte and MetaHash [32]byte
 type FileIndex struct {
 	Name string
 	Size int64
@@ -101,7 +109,9 @@ type FileIndex struct {
 	MetaHash [32]byte
 }
 
-// Gossiper structure with address *net.UDPAddr, conn *net.UDPConn; Name, peers, ID strings; Sttus StatusPacket, simpleMode bool, rumors map[string][]RumorMessage; rumorsToAck & rumorsAcked map[string][]RumorAck
+// Gossiper structure with address *net.UDPAddr, conn *net.UDPConn; Name, peers, ID strings; Sttus StatusPacket, simpleMode bool, rumors map[string][]RumorMessage; rumorsToAck
+// rumorsAcked map[string][]RumorAck; peersMutex, rumorsToAckMutex, statusMutex, rumorsMutex, routingMutex, filesIndexMutex, privateMutex and downloadMutex *sync.Mutexs; routingTable map[string]string
+// filesIndex map[[32]byte]FileIndex, private map[string][]PrivateMessage and downloads []chan DataReply
 type Gossiper struct {
 	address     *net.UDPAddr
 	conn        *net.UDPConn
@@ -113,11 +123,16 @@ type Gossiper struct {
 	rumors      map[string][]RumorMessage
 	rumorsToAck map[string][]RumorAck
 	rumorsAcked map[string][]RumorAck
+	routingTable map[string]string
+	filesIndex map[[32]byte]FileIndex
+	private map[string][]PrivateMessage
+	downloads []chan DataReply
 	peersMutex  *sync.Mutex
 	rumorsToAckMutex *sync.Mutex
 	statusMutex *sync.Mutex
 	rumorsMutex *sync.Mutex
-	routingTable map[string]string
-	filesIndex map[[32]byte]FileIndex
-	downloads []chan [32]byte
+	routingMutex  *sync.Mutex
+	filesIndexMutex *sync.Mutex
+	privateMutex *sync.Mutex
+	downloadsMutex *sync.Mutex
 }

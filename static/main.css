@@ -21,6 +21,9 @@ label {
 h5 {
     display: inline;
 }
+h3 {
+    font-size: 1.5rem;
+}
 
 /* Boostrap overwrite */
 .col-sm-7,
@@ -57,13 +60,15 @@ h5 {
     border-radius: 0px;
     border-bottom: none;
 }
-
 .users .list-group-item:hover {
     background: #b2dfdb;
     cursor: pointer;
 }
 .alert {
     width: 100%;
+}
+h4.alert{
+    margin-top: 15px;
 }
 .card-subtitle {
     margin-left: 10px;
@@ -83,6 +88,10 @@ h5 {
 .flex-item-3 {
     flex-grow: 4
 }
+.close {
+    margin-left: 99%;
+}
+.privateBox,
 .messageBox {
     border-radius: 10px;
     background-color: #DBDBDB;
@@ -94,6 +103,10 @@ h5 {
     max-height: 35vh;
     position: relative;
 }
+.privateBox {
+    min-height: 200px;
+    margin-bottom: 15px;
+}
 .message {
     width: 75%;
     border-radius: 7px;
@@ -101,7 +114,6 @@ h5 {
 .message.mine {
     margin-left: 25%;
 }
-
 .modal {
     display: none;
     position: fixed; 
@@ -114,22 +126,22 @@ h5 {
     background-color: rgb(0,0,0); 
     background-color: rgba(0,0,0,0.4);
 }
-
 .modal-content {
     background-color: #fefefe;
-    margin: 15% auto; 
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     padding: 20px;
     border: 1px solid #888;
     width: 80%;
 }
-
 .close {
     color: #aaa;
     float: right;
     font-size: 28px;
     font-weight: bold;
 }
-
 .close:hover,
 .close:focus {
     color: black;

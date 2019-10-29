@@ -49,6 +49,7 @@ func printRumormongering(address string) {
 	fmt.Println("MONGERING with " + address)
 }
 
+// Print routing table update
 func printDSDV(origin, addr string) {
 	fmt.Println("DSDV " + origin + " " + addr)
 }
@@ -66,6 +67,26 @@ func printInSync(address string) {
 // Print peers
 func printPeers(peers string) {
 	fmt.Println("PEERS " + peers)
+}
+
+// Print downloading metafile
+func printDownloadingMetafile(name, destination string) {
+	fmt.Println("DOWNLOADING metafile of " + name + " from " + destination)
+}
+
+// Print downloading chunk
+func printDownloadingChunk(name, destination string, chunkCount int) {
+	fmt.Println("DOWNLOADING " + name+ " chunk "+ fmt.Sprint(chunkCount) + " from " + destination)
+}
+
+// Print file reconstructed
+func printReconstructed(name string) {
+	fmt.Println("RECONSTRUCTED file " + name)
+}
+
+// Print new private message from our client
+func printPrivateClient(text, destination string) {
+	fmt.Println("CLIENT MESSAGE " + text + " dest " + destination)
 }
 
 /* SEND MESSAGES */
@@ -288,6 +309,7 @@ func main() {
 		go antientropy(gos, tickerA)
 	}
 
+	// If rtimer > 0 start the automatic route rumors thread sender and send a route rumor right away
 	if *rtimer > 0 {
 		sendRumorMsg(gos)
 		tickerR := time.NewTicker(time.Duration(*rtimer) * time.Second)
