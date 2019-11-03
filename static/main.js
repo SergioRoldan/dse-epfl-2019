@@ -39,6 +39,7 @@ $(document).ready(function() {
 
         refreshIntervalId = setInterval(() => {
             getPrivateMessages(name)
+            console.log("interval fired")
         },  2000);
     })
 
@@ -271,6 +272,7 @@ function getPrivateMessages(user) {
         type: 'get',
         data: { user: user },
         success: function(data) {
+            console.log(data.Private)
             if(data.Private == null) {
                 return
             }            

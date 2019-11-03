@@ -73,7 +73,10 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 		printPrivateClient(text, destination)
 
 		sendMsgTo(addr, msg, *gos)
+		gos.privateMutex.Lock()
 		gos.private[msg.Private.Destination] = append(gos.private[msg.Private.Destination], *msg.Private)
+		gos.privateMutex.Unlock()
+
 	} else {
 		fmt.Println("Unable to send message to unknown peer")
 	}

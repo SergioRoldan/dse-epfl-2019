@@ -141,7 +141,9 @@ func privateHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 			return
 		}
 
+		gos.privateMutex.Lock()
 		private := PrivateResponse{ gos.private[user] }
+		gos.privateMutex.Unlock()
 
 		js, err := json.Marshal(private)
 		if err != nil {
@@ -211,7 +213,9 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		}
 
 		ch := make(chan DataReply)
+		gos.downloadsMutex.Lock()
 		gos.downloads = append(gos.downloads, ch)
+		gos.downloadsMutex.Unlock()
 		go handleFileDownload(gos, tmpMsg, ch)
 
 		w.WriteHeader(http.StatusOK)

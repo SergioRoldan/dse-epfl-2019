@@ -255,7 +255,9 @@ func handlePrivateMsg(gos *Gossiper, msg *GossipPacket) {
 	// If the message is for me print it and add it to the private list of origin's node
 	if gos.ID == msg.Private.Destination {
 		printMessage(*msg, gos.simpleMode, false, "")
+		gos.privateMutex.Lock()
 		gos.private[msg.Private.Origin] = append(gos.private[msg.Private.Origin], *msg.Private)
+		gos.privateMutex.Unlock()
 		return
 	}
 
@@ -295,6 +297,7 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 		copy(hashVal[:], msg.DataRequest.HashValue)
 		// If the hash is a metahash send the meta file
 		gos.filesIndexMutex.Lock()
+		defer gos.filesIndexMutex.Unlock()
 		if _, ok := gos.filesIndex[hashVal]; ok {
 			rmr := &DataReply {
 				Origin: gos.ID,
@@ -367,7 +370,6 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 					break
 				}
 			}
-			gos.filesIndexMutex.Unlock()
 
 			// If it's not send and empty data reply
 			if !fnd {
@@ -376,12 +378,13 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 					Destination: msg.DataRequest.Origin,
 					HopLimit: 9,
 					HashValue: msg.DataRequest.HashValue,
+
 				}
 
 				msgTmp := &GossipPacket{DataReply: rmr}
 
 				gos.routingMutex.Lock()
-				addr := gos.routiungTable[msg.DataRequest.Origin]
+				addr := gos.routingTable[msg.DataRequest.Origin]
 				gos.routingMutex.Unlock()
 
 				if addr != "" {
@@ -424,9 +427,11 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 func handleDataReply(gos *Gossiper, msg *GossipPacket) {
 	// If it's for me notify all the active download threads of the new reply using its channels
 	if gos.ID == msg.DataReply.Destination {
+		gos.downloadsMutex.Lock()
 		for _ ,c := range gos.downloads {
 			c <- *msg.DataReply
 		}
+		gos.downloadsMutex.Unlock()
 		return
 	}
 
@@ -535,7 +540,9 @@ func handleClientConnection(conn *net.UDPConn, gos *Gossiper) {
 	}  else if tmpMsg.File != nil {
 		if tmpMsg.Request != nil && tmpMsg.Destination != nil {
 			ch := make(chan DataReply)
+			gos.downloadsMutex.Lock()
 			gos.downloads = append(gos.downloads, ch)
+			gos.downloadsMutex.Unlock()
 			go handleFileDownload(gos, *tmpMsg, ch)
 		} else {
 			handleFileIndexing(gos, *tmpMsg.File);

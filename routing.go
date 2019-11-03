@@ -7,9 +7,10 @@ import (
 // Update a routing entry and print a DSDV message if the table will be updated
 func updateRoutingEntry(addr, origin string, gos *Gossiper, print bool) {
 	gos.routingMutex.Lock()
+	diff := gos.routingTable[origin] != addr
 	gos.routingTable[origin] = addr
 	gos.routingMutex.Unlock()
-	if print {
+	if print && diff {
 		printDSDV(origin, addr)
 	}
 }
