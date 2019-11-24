@@ -49,35 +49,60 @@ func sendNewRumorMessage(gos *Gossiper, text string) {
 // Send a new private message
 func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 	rmr := &PrivateMessage{
-		Origin: gos.ID,
-		ID:     0,
-		Text:   text,
-		Destination:	destination,
-		HopLimit: 10,
+		Origin:      gos.ID,
+		ID:          0,
+		Text:        text,
+		Destination: destination,
+		HopLimit:    10,
 	}
 
 	msg := &GossipPacket{Private: rmr}
+
+	printPrivateClient(text, destination)
 
 	if destination == gos.ID {
 		printMessage(*msg, gos.simpleMode, true, "")
 		return
 	}
 
-	msg.Private.HopLimit -= 1
+	msg.Private.HopLimit = 9
 
 	gos.routingMutex.Lock()
 	addr := gos.routingTable[destination]
 	gos.routingMutex.Unlock()
 
 	if addr != "" {
-		printPrivateClient(text, destination)
-
 		sendMsgTo(addr, msg, *gos)
 		gos.privateMutex.Lock()
 		gos.private[msg.Private.Destination] = append(gos.private[msg.Private.Destination], *msg.Private)
 		gos.privateMutex.Unlock()
-
 	} else {
 		fmt.Println("Unable to send message to unknown peer")
 	}
+}
+
+func sendNewSearchReply(gos *Gossiper, searchReply *SearchReply) {
+	msg := &GossipPacket{SearchReply: searchReply}
+
+	gos.routingMutex.Lock()
+	addr := gos.routingTable[searchReply.Destination]
+	gos.routingMutex.Unlock()
+
+	if addr != "" {
+		sendMsgTo(addr, msg, *gos)
+	} else {
+		fmt.Println("Unable to send message to unknown peer")
+	}
+}
+
+func forwardSearchRequest(gos *Gossiper, origin, addr string, keywords []string, budget uint64) {
+	srch := &SearchRequest{
+		Origin:   origin,
+		Budget:   budget,
+		Keywords: keywords,
+	}
+
+	msg := &GossipPacket{SearchRequest: srch}
+
+	sendMsgTo(addr, msg, *gos)
 }

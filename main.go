@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"time"
 	"strings"
+	"time"
 
 	"go.dedis.ch/protobuf"
 )
@@ -21,9 +21,9 @@ var timeout int
 func printMessage(packedMsg GossipPacket, simpleMode, isClient bool, address string) {
 	if simpleMode {
 		if isClient {
-			fmt.Println("CLIENT MESSAGE " + packedMsg.Simple.Contents)
+			//fmt.Println("CLIENT MESSAGE " + packedMsg.Simple.Contents)
 		} else {
-			fmt.Println("SIMPLE MESSAGE origin " + packedMsg.Simple.OriginalName + " from " + packedMsg.Simple.RelayPeerAddr + " contents " + packedMsg.Simple.Contents)
+			//fmt.Println("SIMPLE MESSAGE origin " + packedMsg.Simple.OriginalName + " from " + packedMsg.Simple.RelayPeerAddr + " contents " + packedMsg.Simple.Contents)
 		}
 	} else if packedMsg.Rumor != nil {
 		if isClient {
@@ -38,7 +38,7 @@ func printMessage(packedMsg GossipPacket, simpleMode, isClient bool, address str
 			peers += " peer " + status.Identifier + " nextID " + fmt.Sprint(status.NextID)
 		}
 
-		fmt.Println("STATUS from " + address + peers)
+		//fmt.Println("STATUS from " + address + peers)
 	} else if packedMsg.Private != nil {
 		fmt.Println("PRIVATE origin " + packedMsg.Private.Origin + " hop-limit " + fmt.Sprint(packedMsg.Private.HopLimit) + " contents " + packedMsg.Private.Text)
 	}
@@ -56,17 +56,17 @@ func printDSDV(origin, addr string) {
 
 // Print flipped coin win, seending rumor to peer
 func printFlippedCoin(address string) {
-	fmt.Println("FLIPPED COIN sending rumor to " + address)
+	//fmt.Println("FLIPPED COIN sending rumor to " + address)
 }
 
 // Print in sync with peer
 func printInSync(address string) {
-	fmt.Println("IN SYNC WITH " + address)
+	//fmt.Println("IN SYNC WITH " + address)
 }
 
 // Print peers
 func printPeers(peers string) {
-	fmt.Println("PEERS " + peers)
+	//fmt.Println("PEERS " + peers)
 }
 
 // Print downloading metafile
@@ -76,7 +76,7 @@ func printDownloadingMetafile(name, destination string) {
 
 // Print downloading chunk
 func printDownloadingChunk(name, destination string, chunkCount int) {
-	fmt.Println("DOWNLOADING " + name+ " chunk "+ fmt.Sprint(chunkCount) + " from " + destination)
+	fmt.Println("DOWNLOADING " + name + " chunk " + fmt.Sprint(chunkCount) + " from " + destination)
 }
 
 // Print file reconstructed
@@ -87,6 +87,24 @@ func printReconstructed(name string) {
 // Print new private message from our client
 func printPrivateClient(text, destination string) {
 	fmt.Println("CLIENT MESSAGE " + text + " dest " + destination)
+}
+
+func printMatchFound(gos *Gossiper, file, node, hash string, chunks []uint64) {
+	var chunkStr []string
+
+	for _, chnk := range chunks {
+		chunkStr = append(chunkStr, fmt.Sprint(chnk))
+	}
+
+	str := "FOUND match " + file + " at " + node + " metafile=" + hash + " chunks=" + strings.Join(chunkStr, ",")
+
+	fmt.Println(str)
+
+	gos.searchMatches = append(gos.searchMatches, str)
+}
+
+func printSearchFinished() {
+	fmt.Println("SEARCH FINISHED")
 }
 
 /* SEND MESSAGES */
@@ -272,7 +290,7 @@ func antientropy(gos *Gossiper, ticker *time.Ticker) {
 			rndPeer := randPeer(*gos)
 			if rndPeer != "" {
 				sendStatusTo(rndPeer, *gos)
-				fmt.Println("Anti-entropy status send to " + rndPeer)
+				//fmt.Println("Anti-entropy status send to " + rndPeer)
 			}
 		}
 	}
@@ -319,7 +337,7 @@ func main() {
 	// If webclient start web server for the client
 	if *webclient {
 		webserver(gos, *UIPort)
-	// Otherwise open a UDP connection for the client
+		// Otherwise open a UDP connection for the client
 	} else {
 		address := "127.0.0.1:" + *UIPort
 

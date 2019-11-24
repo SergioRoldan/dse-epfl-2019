@@ -1,22 +1,25 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"fmt"
-	"strings"
 	"os"
-	"encoding/hex"
+	"sort"
+	"strconv"
+	"strings"
 )
 
-// Constants
+// DIR base directory of static files
 const DIR = "./static/"
 
 // PrivateHTTPMessage structure with Text and Destination strings
 type PrivateHTTPMessage struct {
-	Text string
+	Text        string
 	Destination string
 }
 
@@ -25,6 +28,12 @@ type DownloadHTTPRequest struct {
 	Name string
 	Hash string
 	Peer string
+}
+
+// SearchHTTPRequest structure with Keywords, Budget strings
+type SearchHTTPRequest struct {
+	Keywords string
+	Budget   string
 }
 
 /* HTTP HANDLERS */
@@ -46,7 +55,7 @@ func nodeHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
 
-	// If POST get the ID and if it's new add it to the list of peers of the gossiper and send 200
+		// If POST get the ID and if it's new add it to the list of peers of the gossiper and send 200
 	} else if r.Method == "POST" {
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -69,7 +78,7 @@ func nodeHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		gos.peersMutex.Unlock()
 
 		w.WriteHeader(http.StatusOK)
-    	w.Write([]byte("200 OK"))
+		w.Write([]byte("200 OK"))
 
 	}
 }
@@ -79,7 +88,7 @@ func messageHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 	// If GET send the gossiper messages in json format
 	if r.Method == "GET" {
 		gos.rumorsMutex.Lock()
-		messages := MessagesResponse{ gos.rumors }
+		messages := MessagesResponse{gos.rumors}
 
 		gos.rumorsMutex.Unlock()
 
@@ -92,7 +101,7 @@ func messageHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
 
-	// If POST get the message content, generate a GossiperPacket and start rumormongering or broadcast depending on the mode
+		// If POST get the message content, generate a GossiperPacket and start rumormongering or broadcast depending on the mode
 	} else if r.Method == "POST" {
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -108,7 +117,7 @@ func messageHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-    	w.Write([]byte("200 OK"))
+		w.Write([]byte("200 OK"))
 	}
 }
 
@@ -126,7 +135,7 @@ func idHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
-	} 
+	}
 }
 
 // private handler
@@ -137,12 +146,12 @@ func privateHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 		if len(user) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-    		w.Write([]byte("Not users specified"))
+			w.Write([]byte("Not users specified"))
 			return
 		}
 
 		gos.privateMutex.Lock()
-		private := PrivateResponse{ gos.private[user] }
+		private := PrivateResponse{gos.private[user]}
 		gos.privateMutex.Unlock()
 
 		js, err := json.Marshal(private)
@@ -153,7 +162,7 @@ func privateHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
-	} 
+	}
 }
 
 // upload handler
@@ -181,8 +190,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		handleFileIndexing(gos, handler.Filename)
 
 		w.WriteHeader(http.StatusOK)
-    	w.Write([]byte("200 OK"))
-	} 
+		w.Write([]byte("200 OK"))
+	}
 }
 
 // download handler
@@ -202,24 +211,124 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-    		w.Write([]byte("ERROR (Unable to decode hex hash)"))
-		} 
+			w.Write([]byte("ERROR (Unable to decode hex hash)"))
+		}
 
-		tmpMsg := Message {
-			Text: "",
-			Destination: &data.Peer,
-			File: &data.Name,
+		tmpMsg := Message{
+			Text:    "",
+			File:    &data.Name,
 			Request: &hash,
 		}
 
-		ch := make(chan DataReply)
-		gos.downloadsMutex.Lock()
-		gos.downloads = append(gos.downloads, ch)
-		gos.downloadsMutex.Unlock()
-		go handleFileDownload(gos, tmpMsg, ch)
+		if data.Peer == "" {
+
+			var searchMatch *SearchMatch
+
+			for _, searchResult := range gos.SearchResult {
+				if bytes.Compare(searchResult.MetafileHash, *tmpMsg.Request) == 0 {
+					searchMatch = &searchResult
+					break
+				}
+			}
+
+			if searchMatch == nil {
+				fmt.Println("File with hash " + hex.EncodeToString(*tmpMsg.Request) + " not found in a previous search")
+				return
+			}
+
+			ch := make(chan DataReply)
+			gos.downloadsMutex.Lock()
+			gos.downloads = append(gos.downloads, ch)
+			gos.downloadsMutex.Unlock()
+			go handleFileDownloadFromSearch(gos, searchMatch, *tmpMsg.File, ch)
+
+		} else {
+			tmpMsg.Destination = &data.Peer
+
+			ch := make(chan DataReply)
+			gos.downloadsMutex.Lock()
+			gos.downloads = append(gos.downloads, ch)
+			gos.downloadsMutex.Unlock()
+			go handleFileDownload(gos, tmpMsg, ch)
+		}
 
 		w.WriteHeader(http.StatusOK)
-    	w.Write([]byte("200 OK"))
+		w.Write([]byte("200 OK"))
+	}
+}
+
+// search handler
+func searchHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
+	//
+	if r.Method == "POST" {
+		reqBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		data := &SearchHTTPRequest{}
+
+		_ = json.Unmarshal(reqBody, data)
+
+		tmpMsg := Message{
+			Text:     "",
+			Keywords: &data.Keywords,
+		}
+
+		fmt.Println(data)
+
+		if data.Budget != "0" {
+			ui, _ := strconv.Atoi(data.Budget)
+			ui64 := uint64(ui)
+			tmpMsg.Budget = &ui64
+		}
+
+		tmpKeywords := strings.Split(*tmpMsg.Keywords, ",")
+		sort.Strings(tmpKeywords)
+
+		ch := make(chan SearchReply)
+		gos.searchs = append(gos.searchs, ch)
+
+		go newFileSearch(gos, tmpKeywords, tmpMsg.Budget, ch)
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("200 OK"))
+	} else if r.Method == "GET" {
+
+		searchMatches := SearchMatchResponse{gos.searchMatches}
+
+		js, err := json.Marshal(searchMatches)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	}
+}
+
+// search handler
+func fileSearchedHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
+	//
+	if r.Method == "GET" {
+
+		var searchMatchRes []SearchMatch
+
+		for _, v := range gos.SearchResult {
+			searchMatchRes = append(searchMatchRes, v)
+		}
+
+		fileSearched := FileSearchedResponse{searchMatchRes}
+
+		js, err := json.Marshal(fileSearched)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
 	}
 }
 
@@ -234,7 +343,7 @@ func usersHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		for k := range routingMap {
 			keys = append(keys, k)
 		}
-		peers := NodesResponse{strings.Join(keys,",")}
+		peers := NodesResponse{strings.Join(keys, ",")}
 
 		js, err := json.Marshal(peers)
 		if err != nil {
@@ -244,7 +353,7 @@ func usersHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
-	// If POST send a new private message to that user
+		// If POST send a new private message to that user
 	} else if r.Method == "POST" {
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -258,7 +367,7 @@ func usersHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		sendNewPrivateMessage(gos, data.Text, data.Destination)
 
 		w.WriteHeader(http.StatusOK)
-    	w.Write([]byte("200 OK"))
+		w.Write([]byte("200 OK"))
 	}
 
 }
@@ -286,6 +395,12 @@ func webserver(gos *Gossiper, UIPort string) {
 	})
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		downloadHandler(w, r, gos)
+	})
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		searchHandler(w, r, gos)
+	})
+	mux.HandleFunc("/fileSearched", func(w http.ResponseWriter, r *http.Request) {
+		fileSearchedHandler(w, r, gos)
 	})
 	mux.Handle("/", http.FileServer(http.Dir(DIR)))
 

@@ -8,6 +8,8 @@ $(document).ready(function() {
     const ps2 = new PerfectScrollbar('.list-group.users');
     const ps3 = new PerfectScrollbar('.privateBox');
     const ps4 = new PerfectScrollbar('.list-group.peers');
+    const ps5 = new PerfectScrollbar('.list-group.searchedMatches');
+    const ps6 = new PerfectScrollbar('.list-group.searchedFiles');
 
     // Interval for private messages
     var refreshIntervalId;
@@ -40,8 +42,35 @@ $(document).ready(function() {
         refreshIntervalId = setInterval(() => {
             getPrivateMessages(name)
             console.log("interval fired")
-        },  2000);
+        }, 2000);
     })
+
+
+    $(".searchedFiles").on("dblclick", ".list-group-item", function(e) {
+
+        tgt = $(e.target).text().split(" and hash ")
+
+        var download = {
+            Name: tgt[0].split(" with name ")[1],
+            Hash: tgt[1],
+            Peer: ""
+        };
+
+        $.ajax({
+            url: actionurl + 'download',
+            type: 'post',
+            data: JSON.stringify(download),
+            success: function(data, textStatus, request) {
+                if (request.status == 200) {
+                    $("#processID").text("Download correctly started, the resulting file will appear on _Downloads folder")
+                    $("#processID").removeClass().addClass("alert alert-success")
+                } else {
+                    $("#processID").text("Download error, try again later")
+                    $("#processID").removeClass().addClass("alert alert-danger")
+                }
+            }
+        });
+    });
 
     // Upload file submit
     $("#uploadForm").submit(function(e) {
@@ -76,47 +105,98 @@ $(document).ready(function() {
     $("#downloadForm").submit(function(e) {
 
         // Prevent default, get values, check values correctness and send ajax
-       e.preventDefault();
+        e.preventDefault();
 
-       var actionurl = e.currentTarget.action;
-       var name = $("#downloadNameInput").val();
-       $("#downloadNameInput").val("")
-       var hash = $("#downloadHashInput").val();
-       $("#downloadHashInput").val("")
-       var peer = $("#downloadPeerInput").val();
-       $("#downloadPeerInput").val("")
+        var actionurl = e.currentTarget.action;
+        var name = $("#downloadNameInput").val();
+        $("#downloadNameInput").val("")
+        var hash = $("#downloadHashInput").val();
+        $("#downloadHashInput").val("")
+        var peer = $("#downloadPeerInput").val();
+        $("#downloadPeerInput").val("")
 
-       $("").each(function() {
-           $(this).remove();
-       });
-1
-       if(name != "" && hash != "" && peer != "" && $(".list-group.users .list-group-item").text().indexOf(peer) != -1 && hash.length == 64 && /[A-Za-z0-9_-]*\.*[A-Za-z0-9]{3,4}/g.test(name) && /[0-9a-fA-F]+/g.test(hash)) {
+        $("").each(function() {
+            $(this).remove();
+        });
+        1
+        if (name != "" && hash != "" && peer != "" && $(".list-group.users .list-group-item").text().indexOf(peer) != -1 && hash.length == 64 && /[A-Za-z0-9_-]*\.*[A-Za-z0-9]{3,4}/g.test(name) && /[0-9a-fA-F]+/g.test(hash)) {
             var download = {
                 Name: name,
                 Hash: hash,
                 Peer: peer
             };
 
-           $.ajax({
-                   url: actionurl + 'download',
-                   type: 'post',
-                   data: JSON.stringify(download),
-                   success: function(data, textStatus, request) {
-                        if(request.status == 200) {
-                            $("#processID").text("Download correctly started, the resulting file will appear on _Downloads folder")
-                            $("#processID").removeClass().addClass("alert alert-success")
-                        } else {
-                            $("#processID").text("Download error, try again later")
-                            $("#processID").removeClass().addClass("alert alert-danger")
-                        }
-                   }
-           });
+            $.ajax({
+                url: actionurl + 'download',
+                type: 'post',
+                data: JSON.stringify(download),
+                success: function(data, textStatus, request) {
+                    if (request.status == 200) {
+                        $("#processID").text("Download correctly started, the resulting file will appear on _Downloads folder")
+                        $("#processID").removeClass().addClass("alert alert-success")
+                    } else {
+                        $("#processID").text("Download error, try again later")
+                        $("#processID").removeClass().addClass("alert alert-danger")
+                    }
+                }
+            });
 
-       } else {
-           $("<div class=\"toast\" role=\"alert\" aria-live=\"assertive\" aria-atomic=\"true\"><div class=\"toast-header\"><strong class=\"mr-auto\">Error File Download</strong><button type=\"button\" class=\"ml-2 mb-1 close\" data-dismiss=\"toast\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button></div><div class=\"toast-body\">Invalid request, the three inputs must be non-empty and follow the hints examples</div></div>").appendTo("#downloadForm");
-       }   
+        } else {
+            $("<div class=\"toast\" role=\"alert\" aria-live=\"assertive\" aria-atomic=\"true\"><div class=\"toast-header\"><strong class=\"mr-auto\">Error File Download</strong><button type=\"button\" class=\"ml-2 mb-1 close\" data-dismiss=\"toast\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button></div><div class=\"toast-body\">Invalid request, the three inputs must be non-empty and follow the hints examples</div></div>").appendTo("#downloadForm");
+        }
 
-   });
+    });
+
+    $("#searchForm").submit(function(e) {
+
+        // Prevent default, get values, check values correctness and send ajax
+        e.preventDefault();
+
+        var actionurl = e.currentTarget.action;
+        var keywords = $("#searchKeywordsInput").val();
+        $("#searchKeywordsInput").val("")
+        var budget = $("#searchBudgetInput").val();
+        $("#searchBudgetInput").val("")
+
+        $("").each(function() {
+            $(this).remove();
+        });
+
+        tmp_keywords = []
+        keywords.split(",").forEach(function(kw) {
+            if (kw != "") {
+                tmp_keywords.push(kw)
+            }
+        });
+
+        if (budget == "") {
+            budget = "0"
+        }
+
+        if (tmp_keywords.length != 0 && /^[1-9]\d*$/g.test(budget)) {
+            var search = {
+                Keywords: tmp_keywords.join(","),
+                Budget: budget
+            };
+
+            $.ajax({
+                url: actionurl + 'search',
+                type: 'post',
+                data: JSON.stringify(search),
+                success: function(data, textStatus, request) {
+                    if (request.status == 200) {
+
+                    } else {
+
+                    }
+                }
+            });
+
+        } else {
+            $("<div class=\"toast\" role=\"alert\" aria-live=\"assertive\" aria-atomic=\"true\"><div class=\"toast-header\"><strong class=\"mr-auto\">Error Search File</strong><button type=\"button\" class=\"ml-2 mb-1 close\" data-dismiss=\"toast\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button></div><div class=\"toast-body\">Invalid request, the keywords input must be non empty and both inputs must have a correct format</div></div>").appendTo("#searchForm");
+        }
+
+    });
 
     // Private message submit
     $("#privateMsgForm").submit(function(e) {
@@ -132,23 +212,23 @@ $(document).ready(function() {
             $(this).remove();
         });
 
-        if(input != "") {
+        if (input != "") {
             var msg = {
                 Text: input,
                 Destination: $("#peerName").text()
             };
 
             $.ajax({
-                    url: actionurl + 'users',
-                    type: 'post',
-                    data: JSON.stringify(msg),
-                    dataType: 'json',
-                    contentType: 'application/json',
-                    success: function(data, textStatus, request) {
-                        if(request.status == 200) {
-                            console.log("Ok message" + jsn)
-                        }
+                url: actionurl + 'users',
+                type: 'post',
+                data: JSON.stringify(msg),
+                dataType: 'json',
+                contentType: 'application/json',
+                success: function(data, textStatus, request) {
+                    if (request.status == 200) {
+                        console.log("Ok message" + jsn)
                     }
+                }
             });
 
         } else {
@@ -171,18 +251,18 @@ $(document).ready(function() {
             $(this).remove();
         });
 
-        if(input != "") {
+        if (input != "") {
             var jsn = input;
 
             $.ajax({
-                    url: actionurl + 'messages',
-                    type: 'post',
-                    data: jsn,
-                    success: function(data, textStatus, request) {
-                        if(request.status == 200) {
-                            console.log("Ok message" + jsn)
-                        }
+                url: actionurl + 'messages',
+                type: 'post',
+                data: jsn,
+                success: function(data, textStatus, request) {
+                    if (request.status == 200) {
+                        console.log("Ok message" + jsn)
                     }
+                }
             });
 
         } else {
@@ -194,7 +274,7 @@ $(document).ready(function() {
     // Peer submit
     $("#peersterForm").submit(function(e) {
 
-         // Prevent default, get value, clean value/errors, check regex test is true and send ajax
+        // Prevent default, get value, clean value/errors, check regex test is true and send ajax
         e.preventDefault();
 
         var actionurl = e.currentTarget.action;
@@ -205,29 +285,29 @@ $(document).ready(function() {
             $(this).remove();
         });
 
-        if(REGEX.test(input)) {
+        if (REGEX.test(input)) {
             var jsn = input;
 
             $.ajax({
-                    url: actionurl + 'nodes',
-                    type: 'post',
-                    data: jsn,
-                    success: function(data, textStatus, request) {
-                        if(request.status == 200) {
-                            console.log("Ok peerster" + jsn)
-                        }
+                url: actionurl + 'nodes',
+                type: 'post',
+                data: jsn,
+                success: function(data, textStatus, request) {
+                    if (request.status == 200) {
+                        console.log("Ok peerster" + jsn)
                     }
+                }
             });
 
         } else {
             $("<div class=\"toast\" role=\"alert\" aria-live=\"assertive\" aria-atomic=\"true\"><div class=\"toast-header\"><strong class=\"mr-auto\">Error Peerster Address</strong><button type=\"button\" class=\"ml-2 mb-1 close\" data-dismiss=\"toast\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button></div><div class=\"toast-body\">Invalid peerster address, the address must follow the pattern 127.127.127.1:9090</div></div>").appendTo("#peersterForm");
-        }   
+        }
 
     });
 
     // Get the node ID
     $.ajax({
-        url: window.location.href  + "id",
+        url: window.location.href + "id",
         type: 'get',
         success: function(data) {
             $("#peerID").text(data.ID)
@@ -237,27 +317,75 @@ $(document).ready(function() {
     // Get peersters, addresses and messages
     getMessages();
     getNodes();
-    getUsers()
+    getUsers();
+    getSearchedFiles();
+    getSearchMatches();
 
     // Get new peersters, addresses and messages each two seconds
     setInterval(() => {
         getNodes();
         getMessages();
         getUsers();
-    },  2000);
-    
+        getSearchedFiles();
+        getSearchMatches();
+    }, 2000);
+
 })
+
+function getSearchMatches() {
+    $.ajax({
+        url: window.location.href + "search",
+        type: 'get',
+        success: function(data) {
+            console.log(data)
+
+            if (data.SearchMatches == null) {
+                return
+            }
+
+            len = $(".list-group.searchedMatches .list-group-item").length
+
+            data.SearchMatches.forEach(function(sMatch, index) {
+                if (index >= len) {
+                    $("<li class=\"list-group-item\">" + sMatch + "</li>").appendTo(".list-group.searchedMatches")
+                    $(".list-group.searchedMatches").scrollTop($(".list-group.searchedMatches")[0].scrollHeight);
+                }
+            })
+
+        }
+    });
+}
+
+function getSearchedFiles() {
+    $.ajax({
+        url: window.location.href + "fileSearched",
+        type: 'get',
+        success: function(data) {
+            console.log(data)
+
+            if (data.FileSearched == null) {
+                return
+            }
+            data.FileSearched.forEach(function(fSearched) {
+                if ($(".list-group.searchedFiles .list-group-item").text().indexOf(fSearched.MetafileHash) == -1) {
+                    $("<li class=\"list-group-item\">File with name " + fSearched.FileName + " and hash " + fSearched.MetafileHash + "</li>").prependTo(".list-group.searchedFiles")
+                    $(".list-group.searchedFiles").scrollTop($(".list-group.searchedFiles")[0].scrollHeight);
+                }
+            })
+        }
+    });
+}
 
 // Get the peersters addresses and if its new add it to the list
 function getNodes() {
     $.ajax({
-        url: window.location.href  + "nodes",
+        url: window.location.href + "nodes",
         type: 'get',
         success: function(data) {
             let peers = data.Peers.split(",");
             peers.forEach(function(peer) {
-                if($(".list-group.peers .list-group-item").text().indexOf(peer) == -1) {
-                    $("<li class=\"list-group-item\">"+peer+"</li>").prependTo(".list-group.peers")
+                if ($(".list-group.peers .list-group-item").text().indexOf(peer) == -1) {
+                    $("<li class=\"list-group-item\">" + peer + "</li>").prependTo(".list-group.peers")
                     $(".list-group.peers").scrollTop($(".list-group.peers")[0].scrollHeight);
                 }
             });
@@ -268,18 +396,18 @@ function getNodes() {
 // Get all private messages with the node user
 function getPrivateMessages(user) {
     $.ajax({
-        url: window.location.href  + "private",
+        url: window.location.href + "private",
         type: 'get',
         data: { user: user },
         success: function(data) {
             console.log(data.Private)
-            if(data.Private == null) {
+            if (data.Private == null) {
                 return
-            }            
+            }
             $('.privateBox').html("")
             data.Private.forEach(function(priv) {
-                let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">"+ priv.Origin +"</h5><h5 class=\"card-subtitle mb-2 text-muted\">"+ priv.HopLimit +"</h5><p class=\"card-text\">" + priv.Text + "</p></div></div>").appendTo(".privateBox")
-                if(priv.Origin != user)
+                let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">" + priv.Origin + "</h5><h5 class=\"card-subtitle mb-2 text-muted\">" + priv.HopLimit + "</h5><p class=\"card-text\">" + priv.Text + "</p></div></div>").appendTo(".privateBox")
+                if (priv.Origin != user)
                     newmsg.addClass("mine")
 
                 $(".privateBox").scrollTop($(".privateBox")[0].scrollHeight);
@@ -291,13 +419,13 @@ function getPrivateMessages(user) {
 // Get the nodes and if its new add it to the list
 function getUsers() {
     $.ajax({
-        url: window.location.href  + "users",
+        url: window.location.href + "users",
         type: 'get',
         success: function(data) {
             let peers = data.Peers.split(",");
             peers.forEach(function(peer) {
-                if($(".list-group.users .list-group-item").text().indexOf(peer) == -1) {
-                    $("<li class=\"list-group-item\">"+peer+"</li>").prependTo(".list-group.users")
+                if ($(".list-group.users .list-group-item").text().indexOf(peer) == -1) {
+                    $("<li class=\"list-group-item\">" + peer + "</li>").prependTo(".list-group.users")
                     $(".list-group.users").scrollTop($(".list-group.users")[0].scrollHeight);
                 }
             });
@@ -308,13 +436,13 @@ function getUsers() {
 // Get the messages and if its new add it to the list
 function getMessages() {
     $.ajax({
-        url: window.location.href  + "messages",
+        url: window.location.href + "messages",
         type: 'get',
         success: function(data) {
             var keys = [];
             let rumors = data.Rumors;
 
-            for(let k in data.Rumors) {
+            for (let k in data.Rumors) {
                 keys.push(k);
             }
 
@@ -323,13 +451,13 @@ function getMessages() {
                     ids: [],
                     nodes: []
                 }
-                
+
                 $(".messageBox .message").each(function() {
-                    origins.ids.push($(this).find('.card-subtitle').text())
-                    origins.nodes.push($(this).find('.card-title').text())
-                })
-                // If node is not new add only the new messages
-                if(origins.nodes.indexOf(node) >= 0) {
+                        origins.ids.push($(this).find('.card-subtitle').text())
+                        origins.nodes.push($(this).find('.card-title').text())
+                    })
+                    // If node is not new add only the new messages
+                if (origins.nodes.indexOf(node) >= 0) {
 
                     var msgs = {
                         ids: [],
@@ -337,7 +465,7 @@ function getMessages() {
                     };
 
                     origins.nodes.forEach(function(val, ind) {
-                        if(val.indexOf(node) !== -1) {
+                        if (val.indexOf(node) !== -1) {
                             msgs.ids.push(origins.ids[ind]);
                             msgs.nodes.push(origins.nodes[ind]);
                         }
@@ -345,28 +473,28 @@ function getMessages() {
 
                     let lastID = 0;
                     rumors[node].forEach(function(rumor) {
-                        if(rumor.Text == "")
-                            return
+                            if (rumor.Text == "")
+                                return
 
-                        if(rumor.ID > msgs.ids[msgs.ids.length -1] && rumor.ID > lastID) {
-                            lastID = rumor.ID;
-                            
-                            let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">"+ rumor.Origin +"</h5><h5 class=\"card-subtitle mb-2 text-muted\">"+ rumor.ID +"</h5><p class=\"card-text\">" + rumor.Text + "</p></div></div>").appendTo(".messageBox")
-                            if(node == $("#peerID").text())
-                                newmsg.addClass("mine")
+                            if (rumor.ID > msgs.ids[msgs.ids.length - 1] && rumor.ID > lastID) {
+                                lastID = rumor.ID;
 
-                            $(".messageBox").scrollTop($(".messageBox")[0].scrollHeight);
-                        }                    
-                    })
-                // If node is new add all messages
+                                let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">" + rumor.Origin + "</h5><h5 class=\"card-subtitle mb-2 text-muted\">" + rumor.ID + "</h5><p class=\"card-text\">" + rumor.Text + "</p></div></div>").appendTo(".messageBox")
+                                if (node == $("#peerID").text())
+                                    newmsg.addClass("mine")
+
+                                $(".messageBox").scrollTop($(".messageBox")[0].scrollHeight);
+                            }
+                        })
+                        // If node is new add all messages
                 } else {
                     rumors[node].forEach(function(rumor) {
-                        if(rumor.Text == "")
+                        if (rumor.Text == "")
                             return
-            
-                        let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">"+ rumor.Origin +"</h5><h5 class=\"card-subtitle mb-2 text-muted\">"+ rumor.ID +"</h5><p class=\"card-text\">" + rumor.Text + "</p></div></div>").appendTo(".messageBox")
-                        // Check if message is originaly from me
-                        if(node == $("#peerID").text())
+
+                        let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">" + rumor.Origin + "</h5><h5 class=\"card-subtitle mb-2 text-muted\">" + rumor.ID + "</h5><p class=\"card-text\">" + rumor.Text + "</p></div></div>").appendTo(".messageBox")
+                            // Check if message is originaly from me
+                        if (node == $("#peerID").text())
                             newmsg.addClass("mine")
 
                         $(".messageBox").scrollTop($(".messageBox")[0].scrollHeight);
