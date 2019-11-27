@@ -50,7 +50,7 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 				}
 
 				budg *= 2
-				divideBudget(gos, uint64(budg), gos.ID, keywords)
+				divideBudget(gos, uint64(budg), gos.ID, "", keywords)
 
 			case searchReply := <-ch:
 				for _, searchResult := range searchReply.Results {
@@ -132,7 +132,7 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 		}
 	} else {
 
-		divideBudget(gos, uint64(*budget), gos.ID, keywords)
+		divideBudget(gos, uint64(*budget), gos.ID, "", keywords)
 
 		ticker := time.NewTicker(2 * time.Second)
 
@@ -216,12 +216,29 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 	}
 }
 
-func divideBudget(gos *Gossiper, budget uint64, origin string, keywords []string) {
-	if budget > 0 && len(strings.Split(gos.peers, ",")) > 0 {
-		divBudget := int(int(budget) / len(strings.Split(gos.peers, ",")))
-		modBudget := int(budget) % len(strings.Split(gos.peers, ","))
+func divideBudget(gos *Gossiper, budget uint64, origin, address string, keywords []string) {
 
-		for _, pr := range strings.Split(gos.peers, ",") {
+	peers := strings.Split(gos.peers, ",")
+
+	if address != "" {
+		j := -1
+		for i, peer := range peers {
+			if peer == address {
+				j = i
+				break
+			}
+		}
+
+		if j >= 0 {
+			peers = append(peers[:j], peers[j+1:]...)
+		}
+	}
+
+	if budget > 0 && len(peers) > 0 {
+		divBudget := int(int(budget) / len(peers))
+		modBudget := int(budget) % len(peers)
+
+		for _, pr := range peers {
 			if modBudget > 0 {
 				forwardSearchRequest(gos, origin, pr, keywords, uint64(divBudget+1))
 				modBudget--

@@ -20,7 +20,7 @@ import (
 /* GOSSIPER STRUCT & WORKER */
 
 // NewGossiper given the address, the name, the peers and the mode returns the pointer to a new created Gossiper
-func NewGossiper(address, name, peers string, mode bool) *Gossiper {
+func NewGossiper(address, name, peers string, mode bool, N, stubbornTout int, hopLimit uint) *Gossiper {
 
 	// Resolve address and listen UDP
 	udpAddr, addrErr := net.ResolveUDPAddr("udp4", address)
@@ -45,22 +45,7 @@ func NewGossiper(address, name, peers string, mode bool) *Gossiper {
 	status := StatusPacket{}
 	status.Want = append(status.Want, PeerStatus{Identifier: id, NextID: 1})
 
-	// Return the Gossiper pointer
-	return &Gossiper{
-		address:          udpAddr,
-		conn:             udpConn,
-		Name:             name,
-		peers:            peers,
-		Status:           status,
-		simpleMode:       mode,
-		ID:               id,
-		rumors:           make(map[string][]RumorMessage),
-		rumorsToAck:      make(map[string][]RumorAck),
-		rumorsAcked:      make(map[string][]RumorAck),
-		routingTable:     make(map[string]string),
-		filesIndex:       make(map[[32]byte]FileIndex),
-		private:          make(map[string][]PrivateMessage),
-		SearchResult:     make(map[string]SearchMatch),
+	mutexs := Mutexs{
 		peersMutex:       &sync.Mutex{},
 		rumorsToAckMutex: &sync.Mutex{},
 		statusMutex:      &sync.Mutex{},
@@ -69,6 +54,28 @@ func NewGossiper(address, name, peers string, mode bool) *Gossiper {
 		filesIndexMutex:  &sync.Mutex{},
 		privateMutex:     &sync.Mutex{},
 		downloadsMutex:   &sync.Mutex{},
+	}
+
+	// Return the Gossiper pointer
+	return &Gossiper{
+		address:      udpAddr,
+		conn:         udpConn,
+		Name:         name,
+		peers:        peers,
+		Status:       status,
+		simpleMode:   mode,
+		ID:           id,
+		N:            N,
+		stubbornTout: stubbornTout,
+		hopLimit:     uint32(hopLimit),
+		rumors:       make(map[string][]RumorMessage),
+		rumorsToAck:  make(map[string][]RumorAck),
+		rumorsAcked:  make(map[string][]RumorAck),
+		routingTable: make(map[string]string),
+		filesIndex:   make(map[[32]byte]FileIndex),
+		private:      make(map[string][]PrivateMessage),
+		SearchResult: make(map[string]SearchMatch),
+		mutexs:       mutexs,
 	}
 }
 
@@ -92,7 +99,7 @@ func handleRumor(addr string, gos *Gossiper, msg *GossipPacket) {
 	var originPos int
 
 	// If node is unknown add to the status list and update the routing table
-	gos.statusMutex.Lock()
+	gos.mutexs.statusMutex.Lock()
 	for i, n := range gos.Status.Want {
 		if n.Identifier == msg.Rumor.Origin {
 			origin = &n
@@ -106,19 +113,19 @@ func handleRumor(addr string, gos *Gossiper, msg *GossipPacket) {
 		gos.Status.Want = append(gos.Status.Want, *origin)
 		originPos = len(gos.Status.Want) - 1
 	}
-	gos.statusMutex.Unlock()
+	gos.mutexs.statusMutex.Unlock()
 
 	// If rumor is a new rumor: update state if we were expecting this message; store and ack the rumor of the sender and start rumormongering with a random peer; also update the routing table
 	found := false
 
-	gos.rumorsMutex.Lock()
+	gos.mutexs.rumorsMutex.Lock()
 	for _, rum := range gos.rumors[origin.Identifier] {
 		if rum.ID == msg.Rumor.ID {
 			found = true
 			break
 		}
 	}
-	gos.rumorsMutex.Unlock()
+	gos.mutexs.rumorsMutex.Unlock()
 
 	if !found {
 		if msg.Rumor.ID >= origin.NextID {
@@ -126,8 +133,8 @@ func handleRumor(addr string, gos *Gossiper, msg *GossipPacket) {
 		}
 
 		if msg.Rumor.ID == origin.NextID {
-			gos.statusMutex.Lock()
-			gos.rumorsMutex.Lock()
+			gos.mutexs.statusMutex.Lock()
+			gos.mutexs.rumorsMutex.Lock()
 			gos.Status.Want[originPos].NextID++
 
 			for _, r := range gos.rumors[origin.Identifier] {
@@ -135,8 +142,8 @@ func handleRumor(addr string, gos *Gossiper, msg *GossipPacket) {
 					gos.Status.Want[originPos].NextID++
 				}
 			}
-			gos.rumorsMutex.Unlock()
-			gos.statusMutex.Unlock()
+			gos.mutexs.rumorsMutex.Unlock()
+			gos.mutexs.statusMutex.Unlock()
 		}
 
 		storeNewMsg(gos, msg, addr)
@@ -153,9 +160,9 @@ func handleRumor(addr string, gos *Gossiper, msg *GossipPacket) {
 // Handle a status message
 func handleStatus(addr string, gos *Gossiper, msg *GossipPacket) {
 	printMessage(*msg, gos.simpleMode, false, addr)
-	gos.peersMutex.Lock()
+	gos.mutexs.peersMutex.Lock()
 	printPeers(gos.peers)
-	gos.peersMutex.Unlock()
+	gos.mutexs.peersMutex.Unlock()
 
 	var msgToSend *PeerStatus
 	var msgToReceive bool
@@ -165,7 +172,7 @@ func handleStatus(addr string, gos *Gossiper, msg *GossipPacket) {
 	for _, msgStatus := range msg.Status.Want {
 		isInStatus := false
 
-		gos.statusMutex.Lock()
+		gos.mutexs.statusMutex.Lock()
 		for _, gosStatus := range gos.Status.Want {
 			// If we already have the node in our status
 			if gosStatus.Identifier == msgStatus.Identifier {
@@ -179,14 +186,14 @@ func handleStatus(addr string, gos *Gossiper, msg *GossipPacket) {
 				}
 
 				// Check all the messages acked by this status
-				gos.rumorsToAckMutex.Lock()
+				gos.mutexs.rumorsToAckMutex.Lock()
 				for j := 0; j < len(gos.rumorsToAck[addr]); j++ {
 					if gos.rumorsToAck[addr][j].Origin == msgStatus.Identifier && msgStatus.NextID >= gos.rumorsToAck[addr][j].ID {
 						msgToAck = append(msgToAck, gos.rumorsToAck[addr][j])
 						gos.rumorsToAck[addr] = append(gos.rumorsToAck[addr][:j], gos.rumorsToAck[addr][j+1:]...)
 					}
 				}
-				gos.rumorsToAckMutex.Unlock()
+				gos.mutexs.rumorsToAckMutex.Unlock()
 
 				break
 			}
@@ -200,15 +207,15 @@ func handleStatus(addr string, gos *Gossiper, msg *GossipPacket) {
 				msgToReceive = true
 			}
 		}
-		gos.statusMutex.Unlock()
+		gos.mutexs.statusMutex.Unlock()
 
 	}
 
 	// If I have a message to send: start rumormongering with the sender and this message
 	if msgToSend != nil {
-		gos.rumorsMutex.Lock()
+		gos.mutexs.rumorsMutex.Lock()
 		gosRumors := gos.rumors[msgToSend.Identifier]
-		gos.rumorsMutex.Unlock()
+		gos.mutexs.rumorsMutex.Unlock()
 
 		for _, rm := range gosRumors {
 			if msgToSend.NextID == rm.ID {
@@ -235,9 +242,9 @@ func handleStatus(addr string, gos *Gossiper, msg *GossipPacket) {
 		for _, flipCoin := range msgToAck {
 
 			if rand.Int()%2 == 0 {
-				gos.rumorsMutex.Lock()
+				gos.mutexs.rumorsMutex.Lock()
 				gosRumors := gos.rumors[flipCoin.Origin]
-				gos.rumorsMutex.Unlock()
+				gos.mutexs.rumorsMutex.Unlock()
 				for _, rm := range gosRumors {
 					if flipCoin.ID == rm.ID {
 						r := &RumorMessage{Origin: rm.Origin, ID: rm.ID, Text: rm.Text}
@@ -255,36 +262,48 @@ func handleStatus(addr string, gos *Gossiper, msg *GossipPacket) {
 }
 
 // Handle a private message
-func handlePrivateMsg(gos *Gossiper, msg *GossipPacket) {
+func handlePrivateMsg(gos *Gossiper, msg *PrivateMessage, isTLCAck bool) {
 	// If the message is for me print it and add it to the private list of origin's node
-	if gos.ID == msg.Private.Destination {
-		printMessage(*msg, gos.simpleMode, false, "")
-		gos.privateMutex.Lock()
-		gos.private[msg.Private.Origin] = append(gos.private[msg.Private.Origin], *msg.Private)
-		gos.privateMutex.Unlock()
+	if !isTLCAck && gos.ID == msg.Destination {
+		printPrivateMessage(*msg)
+		gos.mutexs.privateMutex.Lock()
+		gos.private[msg.Origin] = append(gos.private[msg.Origin], *msg)
+		gos.mutexs.privateMutex.Unlock()
 		return
+	} else if isTLCAck && gos.ID == msg.Destination {
+		for _, c := range gos.tlcAcks {
+			tlcAck := TLCAck(*msg)
+			c <- tlcAck
+		}
 	}
 
 	// Discard the message silenty if the hop limit has been reached
-	if msg.Private.HopLimit == 0 {
+	if msg.HopLimit == 0 {
 		return
 	}
 
 	// Get the routing address and forward the private message
-	gos.routingMutex.Lock()
-	addr := gos.routingTable[msg.Private.Destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Lock()
+	addr := gos.routingTable[msg.Destination]
+	gos.mutexs.routingMutex.Unlock()
 
 	if addr != "" {
-		rmr := &PrivateMessage{
-			Origin:      msg.Private.Origin,
-			ID:          msg.Private.ID,
-			Text:        msg.Private.Text,
-			Destination: msg.Private.Destination,
-			HopLimit:    msg.Private.HopLimit - 1,
+		msgTmp := &GossipPacket{}
+
+		rmr := PrivateMessage{
+			Origin:      msg.Origin,
+			ID:          msg.ID,
+			Text:        msg.Text,
+			Destination: msg.Destination,
+			HopLimit:    msg.HopLimit - 1,
 		}
 
-		msgTmp := &GossipPacket{Private: rmr}
+		if !isTLCAck {
+			msgTmp.Private = &rmr
+		} else {
+			tlcAck := TLCAck(rmr)
+			msgTmp.Ack = &tlcAck
+		}
 
 		sendMsgTo(addr, msgTmp, *gos)
 	} else {
@@ -300,20 +319,20 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 
 		copy(hashVal[:], msg.DataRequest.HashValue)
 		// If the hash is a metahash send the meta file
-		gos.filesIndexMutex.Lock()
-		defer gos.filesIndexMutex.Unlock()
+		gos.mutexs.filesIndexMutex.Lock()
+		defer gos.mutexs.filesIndexMutex.Unlock()
 		if _, ok := gos.filesIndex[hashVal]; ok {
 			rmr := &DataReply{
 				Origin:      gos.ID,
 				Destination: msg.DataRequest.Origin,
-				HopLimit:    9,
+				HopLimit:    gos.hopLimit - 1,
 				HashValue:   msg.DataRequest.HashValue,
 				Data:        gos.filesIndex[hashVal].Meta,
 			}
 
-			gos.routingMutex.Lock()
+			gos.mutexs.routingMutex.Lock()
 			addr := gos.routingTable[msg.DataRequest.Origin]
-			gos.routingMutex.Unlock()
+			gos.mutexs.routingMutex.Unlock()
 
 			if addr != "" {
 				msgTmp := &GossipPacket{DataReply: rmr}
@@ -336,7 +355,7 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 						rmr = &DataReply{
 							Origin:      gos.ID,
 							Destination: msg.DataRequest.Origin,
-							HopLimit:    9,
+							HopLimit:    gos.hopLimit - 1,
 							HashValue:   msg.DataRequest.HashValue,
 						}
 					} else {
@@ -349,7 +368,7 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 						rmr = &DataReply{
 							Origin:      gos.ID,
 							Destination: msg.DataRequest.Origin,
-							HopLimit:    9,
+							HopLimit:    gos.hopLimit - 1,
 							HashValue:   msg.DataRequest.HashValue,
 							Data:        b,
 						}
@@ -357,9 +376,9 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 
 					f.Close()
 
-					gos.routingMutex.Lock()
+					gos.mutexs.routingMutex.Lock()
 					addr := gos.routingTable[msg.DataRequest.Origin]
-					gos.routingMutex.Unlock()
+					gos.mutexs.routingMutex.Unlock()
 
 					if addr != "" {
 						msgTmp := &GossipPacket{DataReply: rmr}
@@ -380,15 +399,15 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 				rmr := &DataReply{
 					Origin:      gos.ID,
 					Destination: msg.DataRequest.Origin,
-					HopLimit:    9,
+					HopLimit:    gos.hopLimit - 1,
 					HashValue:   msg.DataRequest.HashValue,
 				}
 
 				msgTmp := &GossipPacket{DataReply: rmr}
 
-				gos.routingMutex.Lock()
+				gos.mutexs.routingMutex.Lock()
 				addr := gos.routingTable[msg.DataRequest.Origin]
-				gos.routingMutex.Unlock()
+				gos.mutexs.routingMutex.Unlock()
 
 				if addr != "" {
 					sendMsgTo(addr, msgTmp, *gos)
@@ -405,9 +424,9 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 		return
 	}
 
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[msg.DataRequest.Destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	// If it's not forward the request
 	if addr != "" {
@@ -430,11 +449,11 @@ func handleDataRequest(gos *Gossiper, msg *GossipPacket) {
 func handleDataReply(gos *Gossiper, msg *GossipPacket) {
 	// If it's for me notify all the active download threads of the new reply using its channels
 	if gos.ID == msg.DataReply.Destination {
-		gos.downloadsMutex.Lock()
+		gos.mutexs.downloadsMutex.Lock()
 		for _, c := range gos.downloads {
 			c <- *msg.DataReply
 		}
-		gos.downloadsMutex.Unlock()
+		gos.mutexs.downloadsMutex.Unlock()
 		return
 	}
 
@@ -442,9 +461,9 @@ func handleDataReply(gos *Gossiper, msg *GossipPacket) {
 		return
 	}
 
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[msg.DataReply.Destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	// If it's not forward the reply
 	if addr != "" {
@@ -464,7 +483,7 @@ func handleDataReply(gos *Gossiper, msg *GossipPacket) {
 	}
 }
 
-func handleSearchRequest(gos *Gossiper, msg *GossipPacket) {
+func handleSearchRequest(addr string, gos *Gossiper, msg *GossipPacket) {
 	sortKeywords := msg.SearchRequest.Keywords
 	sort.Strings(sortKeywords)
 
@@ -492,7 +511,7 @@ func handleSearchRequest(gos *Gossiper, msg *GossipPacket) {
 		searchReply := &SearchReply{
 			Origin:      gos.ID,
 			Destination: msg.SearchRequest.Origin,
-			HopLimit:    9,
+			HopLimit:    gos.hopLimit - 1,
 		}
 
 		for _, file := range files {
@@ -511,7 +530,7 @@ func handleSearchRequest(gos *Gossiper, msg *GossipPacket) {
 		sendNewSearchReply(gos, searchReply)
 	}
 
-	divideBudget(gos, msg.SearchRequest.Budget-1, msg.SearchRequest.Origin, sortKeywords)
+	divideBudget(gos, msg.SearchRequest.Budget-1, msg.SearchRequest.Origin, addr, sortKeywords)
 }
 
 func handleSearchReply(gos *Gossiper, msg *GossipPacket) {
@@ -526,9 +545,9 @@ func handleSearchReply(gos *Gossiper, msg *GossipPacket) {
 		return
 	}
 
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[msg.SearchReply.Destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	// If it's not forward the reply
 	if addr != "" {
@@ -568,7 +587,7 @@ func handleGossiperConnection(conn *net.UDPConn, gos *Gossiper) {
 	addr := ipAddr.IP.String() + ":" + strconv.Itoa(ipAddr.Port)
 
 	// Add a new peer if the sender is unknown
-	gos.peersMutex.Lock()
+	gos.mutexs.peersMutex.Lock()
 	if !strings.Contains(gos.peers, addr) {
 		if gos.peers == "" {
 			gos.peers = addr
@@ -579,32 +598,35 @@ func handleGossiperConnection(conn *net.UDPConn, gos *Gossiper) {
 		}
 
 	}
-	gos.peersMutex.Unlock()
+	gos.mutexs.peersMutex.Unlock()
 
 	// In simple mode replace parameters and forward message
 	if gos.simpleMode {
 		printMessage(*msg, gos.simpleMode, false, "")
-		gos.peersMutex.Lock()
+		gos.mutexs.peersMutex.Lock()
 		forwardPeers := strings.Replace(gos.peers, addr, "", -1)
-		gos.peersMutex.Unlock()
+		gos.mutexs.peersMutex.Unlock()
 		msg.Simple.RelayPeerAddr = gos.address.IP.String() + ":" + strconv.Itoa(gos.address.Port)
 		broadcast(forwardPeers, msg, *gos)
-		gos.peersMutex.Lock()
+		gos.mutexs.peersMutex.Lock()
 		printPeers(gos.peers)
-		gos.peersMutex.Unlock()
+		gos.mutexs.peersMutex.Unlock()
 		// If it's another kind of message let its handler take care of it
 	} else if msg.Rumor != nil {
 		handleRumor(addr, gos, msg)
 	} else if msg.Status != nil {
 		handleStatus(addr, gos, msg)
 	} else if msg.Private != nil {
-		handlePrivateMsg(gos, msg)
+		handlePrivateMsg(gos, msg.Private, false)
+	} else if msg.Ack != nil {
+		tlcAck := PrivateMessage(*msg.Ack)
+		handlePrivateMsg(gos, &tlcAck, true)
 	} else if msg.DataRequest != nil {
 		handleDataRequest(gos, msg)
 	} else if msg.DataReply != nil {
 		handleDataReply(gos, msg)
 	} else if msg.SearchRequest != nil {
-		handleSearchRequest(gos, msg)
+		handleSearchRequest(addr, gos, msg)
 	} else if msg.SearchReply != nil {
 		handleSearchReply(gos, msg)
 	}
@@ -630,9 +652,9 @@ func handleClientConnection(conn *net.UDPConn, gos *Gossiper) {
 	} else if tmpMsg.File != nil {
 		if tmpMsg.Request != nil && tmpMsg.Destination != nil {
 			ch := make(chan DataReply)
-			gos.downloadsMutex.Lock()
+			gos.mutexs.downloadsMutex.Lock()
 			gos.downloads = append(gos.downloads, ch)
-			gos.downloadsMutex.Unlock()
+			gos.mutexs.downloadsMutex.Unlock()
 			go handleFileDownload(gos, *tmpMsg, ch)
 		} else if tmpMsg.Request != nil {
 
@@ -651,9 +673,9 @@ func handleClientConnection(conn *net.UDPConn, gos *Gossiper) {
 			}
 
 			ch := make(chan DataReply)
-			gos.downloadsMutex.Lock()
+			gos.mutexs.downloadsMutex.Lock()
 			gos.downloads = append(gos.downloads, ch)
-			gos.downloadsMutex.Unlock()
+			gos.mutexs.downloadsMutex.Unlock()
 			go handleFileDownloadFromSearch(gos, searchMatch, *tmpMsg.File, ch)
 		} else {
 			handleFileIndexing(gos, *tmpMsg.File)
@@ -669,7 +691,7 @@ func handleClientConnection(conn *net.UDPConn, gos *Gossiper) {
 
 		go newFileSearch(gos, tmpKeywords, tmpMsg.Budget, ch)
 	} else {
-		sendNewRumorMessage(gos, tmpMsg.Text)
+		sendNewRumorMessage(gos, tmpMsg.Text, nil)
 	}
 
 }

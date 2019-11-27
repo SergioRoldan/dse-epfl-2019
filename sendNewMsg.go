@@ -10,15 +10,15 @@ func sendNewSimpleMessage(gos *Gossiper, text string) {
 	msg := &GossipPacket{}
 	msg.Simple = &SimpleMessage{gos.Name, gos.address.IP.String() + ":" + strconv.Itoa(gos.address.Port), text}
 	printMessage(*msg, gos.simpleMode, true, "")
-	gos.peersMutex.Lock()
+	gos.mutexs.peersMutex.Lock()
 	broadcast(gos.peers, msg, *gos)
-	gos.peersMutex.Unlock()
+	gos.mutexs.peersMutex.Unlock()
 }
 
 // Send a new rumor message
-func sendNewRumorMessage(gos *Gossiper, text string) {
+func sendNewRumorMessage(gos *Gossiper, text string, tlcMessage *TLCMessage) {
 	nID := 0
-	gos.statusMutex.Lock()
+	gos.mutexs.statusMutex.Lock()
 	for i, n := range gos.Status.Want {
 		if n.Identifier == gos.ID {
 			nID = i
@@ -26,23 +26,46 @@ func sendNewRumorMessage(gos *Gossiper, text string) {
 		}
 	}
 
-	rmr := &RumorMessage{
-		Origin: gos.ID,
-		ID:     gos.Status.Want[nID].NextID,
-		Text:   text,
-	}
+	nextID := gos.Status.Want[nID].NextID
 
 	gos.Status.Want[nID].NextID++
-	gos.statusMutex.Unlock()
+	gos.mutexs.statusMutex.Unlock()
 
-	msg := &GossipPacket{Rumor: rmr}
+	msg := &GossipPacket{}
 
-	printMessage(*msg, gos.simpleMode, true, "")
-	storeMsg(gos, *msg.Rumor)
+	if tlcMessage == nil {
+		rmr := &RumorMessage{
+			Origin: gos.ID,
+			ID:     nextID,
+			Text:   text,
+		}
+
+		msg.Rumor = rmr
+
+		printMessage(*msg, gos.simpleMode, true, "")
+		storeMsg(gos, *msg.Rumor)
+	} else {
+		tlcMessage.ID = nextID
+		msg.TLCMessage = tlcMessage
+	}
 
 	rndPeer := randPeer(*gos)
 	if rndPeer != "" {
 		rumormongering(gos, msg, rndPeer)
+	}
+}
+
+func sendNewTLCAck(gos *Gossiper, tlcAck *TLCAck) {
+	msg := &GossipPacket{Ack: tlcAck}
+
+	gos.mutexs.routingMutex.Lock()
+	addr := gos.routingTable[tlcAck.Destination]
+	gos.mutexs.routingMutex.Unlock()
+
+	if addr != "" {
+		sendMsgTo(addr, msg, *gos)
+	} else {
+		fmt.Println("Unable to send message to unknown peer")
 	}
 }
 
@@ -53,7 +76,7 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 		ID:          0,
 		Text:        text,
 		Destination: destination,
-		HopLimit:    10,
+		HopLimit:    gos.hopLimit,
 	}
 
 	msg := &GossipPacket{Private: rmr}
@@ -65,17 +88,17 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 		return
 	}
 
-	msg.Private.HopLimit = 9
+	msg.Private.HopLimit--
 
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	if addr != "" {
 		sendMsgTo(addr, msg, *gos)
-		gos.privateMutex.Lock()
+		gos.mutexs.privateMutex.Lock()
 		gos.private[msg.Private.Destination] = append(gos.private[msg.Private.Destination], *msg.Private)
-		gos.privateMutex.Unlock()
+		gos.mutexs.privateMutex.Unlock()
 	} else {
 		fmt.Println("Unable to send message to unknown peer")
 	}
@@ -84,9 +107,9 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 func sendNewSearchReply(gos *Gossiper, searchReply *SearchReply) {
 	msg := &GossipPacket{SearchReply: searchReply}
 
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[searchReply.Destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	if addr != "" {
 		sendMsgTo(addr, msg, *gos)

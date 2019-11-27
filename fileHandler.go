@@ -88,9 +88,9 @@ func handleFileIndexing(gos *Gossiper, filename string) {
 
 	// Add the fileIndex to the gossiper list of indexed files
 	fileIndex := FileIndex{filename, fi.Size(), hash, sha256.Sum256(hash), chunkCount, chunkMap}
-	gos.filesIndexMutex.Lock()
+	gos.mutexs.filesIndexMutex.Lock()
 	gos.filesIndex[fileIndex.MetaHash] = fileIndex
-	gos.filesIndexMutex.Unlock()
+	gos.mutexs.filesIndexMutex.Unlock()
 
 	// Just for test reasons when dealing with new files
 	fmt.Println(hex.EncodeToString(fileIndex.MetaHash[:]))
@@ -105,16 +105,16 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 	chunkCount := 1
 
 	// Get the routing address
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[*req.Destination]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	if addr != "" {
 		// Send the metafile request
 		rmr := &DataRequest{
 			Origin:      gos.ID,
 			Destination: *req.Destination,
-			HopLimit:    9,
+			HopLimit:    gos.hopLimit - 1,
 			HashValue:   *req.Request,
 		}
 
@@ -138,7 +138,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 			if len(dataReply.Data) == 0 && (bytes.Compare(dataReply.HashValue, *req.Request) == 0 || bytes.Compare(dataReply.HashValue, chunkHash) == 0) {
 				timer.Stop()
 				i := -1
-				gos.downloadsMutex.Lock()
+				gos.mutexs.downloadsMutex.Lock()
 				for k, v := range gos.downloads {
 					if v == ch {
 						i = k
@@ -148,7 +148,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 				if i != -1 {
 					gos.downloads = append(gos.downloads[:i], gos.downloads[i+1:]...)
 				}
-				gos.downloadsMutex.Unlock()
+				gos.mutexs.downloadsMutex.Unlock()
 				fmt.Println(*req.Destination + " unable to send the requested chunk/metafile. Download aborted for file " + *req.File)
 				return
 			}
@@ -167,9 +167,9 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 					chunkHash = (*meta)[:32]
 
 					fileIndex = FileIndex{*req.File, 0, dataReply.Data, hashVal, uint64(len(dataReply.Data) / 32), make([]uint64, 0)}
-					gos.filesIndexMutex.Lock()
+					gos.mutexs.filesIndexMutex.Lock()
 					gos.filesIndex[fileIndex.MetaHash] = fileIndex
-					gos.filesIndexMutex.Unlock()
+					gos.mutexs.filesIndexMutex.Unlock()
 
 					// Check that DOWNDIR exists or create it
 					if _, err := os.Stat(DOWNDIR); os.IsNotExist(err) {
@@ -189,7 +189,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: *req.Destination,
-						HopLimit:    9,
+						HopLimit:    gos.hopLimit - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -207,9 +207,9 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 					timer.Stop()
 					fileIndex.Size += int64(len(dataReply.Data))
 					fileIndex.ChunkMap = append(fileIndex.ChunkMap, uint64(chunkCount-1))
-					gos.filesIndexMutex.Lock()
+					gos.mutexs.filesIndexMutex.Lock()
 					gos.filesIndex[fileIndex.MetaHash] = fileIndex
-					gos.filesIndexMutex.Unlock()
+					gos.mutexs.filesIndexMutex.Unlock()
 
 					// Write the file with the chunk
 					file, err := os.OpenFile(DOWNDIR+*req.File, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
@@ -242,7 +242,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 						i := -1
 
 						// Remove the channel from the gossiper and return from the thread
-						gos.downloadsMutex.Lock()
+						gos.mutexs.downloadsMutex.Lock()
 						for k, v := range gos.downloads {
 							if v == ch {
 								i = k
@@ -252,7 +252,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 						if i != -1 {
 							gos.downloads = append(gos.downloads[:i], gos.downloads[i+1:]...)
 						}
-						gos.downloadsMutex.Unlock()
+						gos.mutexs.downloadsMutex.Unlock()
 						return
 					}
 
@@ -264,7 +264,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: *req.Destination,
-						HopLimit:    9,
+						HopLimit:    gos.hopLimit - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -283,7 +283,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: *req.Destination,
-					HopLimit:    9,
+					HopLimit:    gos.hopLimit - 1,
 					HashValue:   *req.Request,
 				}
 
@@ -295,7 +295,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: *req.Destination,
-					HopLimit:    9,
+					HopLimit:    gos.hopLimit - 1,
 					HashValue:   chunkHash,
 				}
 
@@ -324,9 +324,9 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 	}
 
 	// Get the routing address from the first chunk
-	gos.routingMutex.Lock()
+	gos.mutexs.routingMutex.Lock()
 	addr := gos.routingTable[currentNode]
-	gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Unlock()
 
 	if addr != "" {
 
@@ -334,7 +334,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 		rmr := &DataRequest{
 			Origin:      gos.ID,
 			Destination: currentNode,
-			HopLimit:    9,
+			HopLimit:    gos.hopLimit - 1,
 			HashValue:   searchMatch.MetafileHash,
 		}
 
@@ -358,7 +358,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 			if len(dataReply.Data) == 0 && (bytes.Compare(dataReply.HashValue, searchMatch.MetafileHash) == 0 || bytes.Compare(dataReply.HashValue, chunkHash) == 0) {
 				timer.Stop()
 				i := -1
-				gos.downloadsMutex.Lock()
+				gos.mutexs.downloadsMutex.Lock()
 				for k, v := range gos.downloads {
 					if v == ch {
 						i = k
@@ -368,7 +368,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 				if i != -1 {
 					gos.downloads = append(gos.downloads[:i], gos.downloads[i+1:]...)
 				}
-				gos.downloadsMutex.Unlock()
+				gos.mutexs.downloadsMutex.Unlock()
 				fmt.Println(currentNode + " unable to send the requested chunk/metafile. Download aborted for file " + name)
 				return
 			}
@@ -387,9 +387,9 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 					chunkHash = (*meta)[:32]
 
 					fileIndex = FileIndex{name, 0, dataReply.Data, hashVal, uint64(len(dataReply.Data) / 32), make([]uint64, 0)}
-					gos.filesIndexMutex.Lock()
+					gos.mutexs.filesIndexMutex.Lock()
 					gos.filesIndex[fileIndex.MetaHash] = fileIndex
-					gos.filesIndexMutex.Unlock()
+					gos.mutexs.filesIndexMutex.Unlock()
 
 					// Check that DOWNDIR exists or create it
 					if _, err := os.Stat(DOWNDIR); os.IsNotExist(err) {
@@ -409,7 +409,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: currentNode,
-						HopLimit:    9,
+						HopLimit:    gos.hopLimit - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -427,9 +427,9 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 					timer.Stop()
 					fileIndex.Size += int64(len(dataReply.Data))
 					fileIndex.ChunkMap = append(fileIndex.ChunkMap, uint64(chunkCount-1))
-					gos.filesIndexMutex.Lock()
+					gos.mutexs.filesIndexMutex.Lock()
 					gos.filesIndex[fileIndex.MetaHash] = fileIndex
-					gos.filesIndexMutex.Unlock()
+					gos.mutexs.filesIndexMutex.Unlock()
 
 					// Write the file with the chunk
 					file, err := os.OpenFile(DOWNDIR+name, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
@@ -462,7 +462,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 						i := -1
 
 						// Remove the channel from the gossiper and return from the thread
-						gos.downloadsMutex.Lock()
+						gos.mutexs.downloadsMutex.Lock()
 						for k, v := range gos.downloads {
 							if v == ch {
 								i = k
@@ -472,7 +472,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 						if i != -1 {
 							gos.downloads = append(gos.downloads[:i], gos.downloads[i+1:]...)
 						}
-						gos.downloadsMutex.Unlock()
+						gos.mutexs.downloadsMutex.Unlock()
 						return
 					}
 
@@ -490,7 +490,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: currentNode,
-						HopLimit:    9,
+						HopLimit:    gos.hopLimit - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -509,7 +509,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: currentNode,
-					HopLimit:    9,
+					HopLimit:    gos.hopLimit - 1,
 					HashValue:   searchMatch.MetafileHash,
 				}
 
@@ -521,7 +521,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: currentNode,
-					HopLimit:    9,
+					HopLimit:    gos.hopLimit - 1,
 					HashValue:   chunkHash,
 				}
 

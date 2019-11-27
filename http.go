@@ -42,9 +42,9 @@ type SearchHTTPRequest struct {
 func nodeHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 	// If GET send the peers in json format
 	if r.Method == "GET" {
-		gos.peersMutex.Lock()
+		gos.mutexs.peersMutex.Lock()
 		peers := NodesResponse{gos.peers}
-		gos.peersMutex.Unlock()
+		gos.mutexs.peersMutex.Unlock()
 
 		js, err := json.Marshal(peers)
 		if err != nil {
@@ -65,7 +65,7 @@ func nodeHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		addr := string(reqBody)
 
 		// If peer is new add it to the gossiper's peerster list
-		gos.peersMutex.Lock()
+		gos.mutexs.peersMutex.Lock()
 		if !strings.Contains(gos.peers, addr) {
 			if gos.peers == "" {
 				gos.peers = addr
@@ -75,7 +75,7 @@ func nodeHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 				gos.peers = strings.Join(auxPeers, ",")
 			}
 		}
-		gos.peersMutex.Unlock()
+		gos.mutexs.peersMutex.Unlock()
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("200 OK"))
@@ -87,10 +87,10 @@ func nodeHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 func messageHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 	// If GET send the gossiper messages in json format
 	if r.Method == "GET" {
-		gos.rumorsMutex.Lock()
+		gos.mutexs.rumorsMutex.Lock()
 		messages := MessagesResponse{gos.rumors}
 
-		gos.rumorsMutex.Unlock()
+		gos.mutexs.rumorsMutex.Unlock()
 
 		js, err := json.Marshal(messages)
 		if err != nil {
@@ -113,7 +113,7 @@ func messageHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 		if gos.simpleMode {
 			sendNewSimpleMessage(gos, tmpMsg)
 		} else {
-			sendNewRumorMessage(gos, tmpMsg)
+			sendNewRumorMessage(gos, tmpMsg, nil)
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -150,9 +150,9 @@ func privateHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 			return
 		}
 
-		gos.privateMutex.Lock()
+		gos.mutexs.privateMutex.Lock()
 		private := PrivateResponse{gos.private[user]}
-		gos.privateMutex.Unlock()
+		gos.mutexs.privateMutex.Unlock()
 
 		js, err := json.Marshal(private)
 		if err != nil {
@@ -237,18 +237,18 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 			}
 
 			ch := make(chan DataReply)
-			gos.downloadsMutex.Lock()
+			gos.mutexs.downloadsMutex.Lock()
 			gos.downloads = append(gos.downloads, ch)
-			gos.downloadsMutex.Unlock()
+			gos.mutexs.downloadsMutex.Unlock()
 			go handleFileDownloadFromSearch(gos, searchMatch, *tmpMsg.File, ch)
 
 		} else {
 			tmpMsg.Destination = &data.Peer
 
 			ch := make(chan DataReply)
-			gos.downloadsMutex.Lock()
+			gos.mutexs.downloadsMutex.Lock()
 			gos.downloads = append(gos.downloads, ch)
-			gos.downloadsMutex.Unlock()
+			gos.mutexs.downloadsMutex.Unlock()
 			go handleFileDownload(gos, tmpMsg, ch)
 		}
 
@@ -336,9 +336,9 @@ func fileSearchedHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) 
 func usersHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 	// If GET send the nodes in json format
 	if r.Method == "GET" {
-		gos.routingMutex.Lock()
+		gos.mutexs.routingMutex.Lock()
 		routingMap := gos.routingTable
-		gos.routingMutex.Unlock()
+		gos.mutexs.routingMutex.Unlock()
 		keys := make([]string, 0, len(routingMap))
 		for k := range routingMap {
 			keys = append(keys, k)

@@ -7,7 +7,6 @@ import (
 
 /* STRUCTS */
 
-// Message structure with Text string, Destination and File *strings; and Request *[]byte
 type Message struct {
 	Text        string
 	Destination *string
@@ -17,7 +16,17 @@ type Message struct {
 	Budget      *uint64
 }
 
-// DataRequest structure with Origin and Destination strings, HopLimit uint32 and HashValue []byte
+type TxPublish struct {
+	Name         string
+	Size         int64
+	MetafileHash []byte
+}
+
+type BlockPublish struct {
+	PrevHash    [32]byte //(used in Exercise 4, for now 0)
+	Transaction TxPublish
+}
+
 type DataRequest struct {
 	Origin      string
 	Destination string
@@ -25,7 +34,6 @@ type DataRequest struct {
 	HashValue   []byte
 }
 
-// DataReply structure with Origin and Destination strings, HopLimit uint32; HashValue and Data []bytes
 type DataReply struct {
 	Origin      string
 	Destination string
@@ -34,7 +42,6 @@ type DataReply struct {
 	Data        []byte
 }
 
-// PrivateMessage structure with Origin, Destination and Text strings; HopLimit and ID uints32
 type PrivateMessage struct {
 	Origin      string
 	ID          uint32
@@ -43,39 +50,33 @@ type PrivateMessage struct {
 	HopLimit    uint32
 }
 
-// SimpleMessage structure with OriginalName, RelayPeerAddr and Contents strings
 type SimpleMessage struct {
 	OriginalName  string
 	RelayPeerAddr string
 	Contents      string
 }
 
-// RumorMessage structure with Text, Origins strings and ID uint32
 type RumorMessage struct {
 	Origin string
 	ID     uint32
 	Text   string
 }
 
-// PeerStatus structure with Identifier string and NextID uint32
 type PeerStatus struct {
 	Identifier string
 	NextID     uint32
 }
 
-// StatusPacket structure with Want slice of PeerStatus
 type StatusPacket struct {
 	Want []PeerStatus
 }
 
-// SearchRequest structure with Origin string, Budget uint64 and Keywords []string
 type SearchRequest struct {
 	Origin   string
 	Budget   uint64
 	Keywords []string
 }
 
-// SearchReply structure with Origin and Destination string, HopLimit uint32 and Results []*SearchResult
 type SearchReply struct {
 	Origin      string
 	Destination string
@@ -83,7 +84,6 @@ type SearchReply struct {
 	Results     []*SearchResult
 }
 
-// SearchResult structure with FileName string, MetafileHash []byte, ChunkMap []uint64 and ChunkCount uint64
 type SearchResult struct {
 	FileName     string
 	MetafileHash []byte
@@ -91,7 +91,6 @@ type SearchResult struct {
 	ChunkCount   uint64
 }
 
-// SearchMatch structure with FileName, Destination strings and MetafileHash []byte
 type SearchMatch struct {
 	FileName     string
 	MetafileHash []byte
@@ -100,7 +99,17 @@ type SearchMatch struct {
 	Chunks       []uint64
 }
 
-// GossipPacket with a Simple *SimpleMessage
+type TLCMessage struct {
+	Origin      string
+	ID          uint32
+	Confirmed   bool
+	TxBlock     BlockPublish
+	VectorClock *StatusPacket //(used in Exercise 3, for now nil)
+	Fitness     float32       //(used in Exercise 4, for now 0)
+}
+
+type TLCAck PrivateMessage
+
 type GossipPacket struct {
 	Simple        *SimpleMessage
 	Rumor         *RumorMessage
@@ -110,45 +119,39 @@ type GossipPacket struct {
 	DataReply     *DataReply
 	SearchRequest *SearchRequest
 	SearchReply   *SearchReply
+	TLCMessage    *TLCMessage
+	Ack           *TLCAck
 }
 
-// IDResponse structure with ID string
 type IDResponse struct {
 	ID string
 }
 
-// NodesResponse structure with Peers string
 type NodesResponse struct {
 	Peers string
 }
 
-// MessagesResponse structure with Rumors map[string][]RumorMessage
 type MessagesResponse struct {
 	Rumors map[string][]RumorMessage
 }
 
-// SearchMatchResponse structure with SearchMatches []string
 type SearchMatchResponse struct {
 	SearchMatches []string
 }
 
-// PrivateResponse structure with Private []PrivateMessage
 type PrivateResponse struct {
 	Private []PrivateMessage
 }
 
-// FileSearchedResponse structure with FileSearched []SearchMatch
 type FileSearchedResponse struct {
 	FileSearched []SearchMatch
 }
 
-// RumorAck structure with Origin string and ID uint32
 type RumorAck struct {
 	Origin string
 	ID     uint32
 }
 
-// FileIndex structure with Name string, Size int64, Meta []byte and MetaHash [32]byte
 type FileIndex struct {
 	Name       string
 	Size       int64
@@ -158,28 +161,7 @@ type FileIndex struct {
 	ChunkMap   []uint64
 }
 
-// Gossiper structure with address *net.UDPAddr, conn *net.UDPConn; Name, peers, ID strings; Sttus StatusPacket, simpleMode bool, rumors map[string][]RumorMessage; rumorsToAck
-// rumorsAcked map[string][]RumorAck; peersMutex, rumorsToAckMutex, statusMutex, rumorsMutex, routingMutex, filesIndexMutex, privateMutex and downloadMutex *sync.Mutexs; routingTable map[string]string
-// filesIndex map[[32]byte]FileIndex, private map[string][]PrivateMessage and downloads []chan DataReply
-type Gossiper struct {
-	address          *net.UDPAddr
-	conn             *net.UDPConn
-	Name             string
-	peers            string
-	Status           StatusPacket
-	simpleMode       bool
-	ID               string
-	rumors           map[string][]RumorMessage
-	rumorsToAck      map[string][]RumorAck
-	rumorsAcked      map[string][]RumorAck
-	routingTable     map[string]string
-	filesIndex       map[[32]byte]FileIndex
-	private          map[string][]PrivateMessage
-	downloads        []chan DataReply
-	recentSearchs    map[string][][]string
-	searchs          []chan SearchReply
-	SearchResult     map[string]SearchMatch
-	searchMatches    []string
+type Mutexs struct {
 	peersMutex       *sync.Mutex
 	rumorsToAckMutex *sync.Mutex
 	statusMutex      *sync.Mutex
@@ -188,4 +170,30 @@ type Gossiper struct {
 	filesIndexMutex  *sync.Mutex
 	privateMutex     *sync.Mutex
 	downloadsMutex   *sync.Mutex
+}
+
+type Gossiper struct {
+	address       *net.UDPAddr
+	conn          *net.UDPConn
+	Name          string
+	peers         string
+	ID            string
+	Status        StatusPacket
+	simpleMode    bool
+	N             int
+	stubbornTout  int
+	hopLimit      uint32
+	rumors        map[string][]RumorMessage
+	rumorsToAck   map[string][]RumorAck
+	rumorsAcked   map[string][]RumorAck
+	private       map[string][]PrivateMessage
+	recentSearchs map[string][][]string
+	routingTable  map[string]string
+	SearchResult  map[string]SearchMatch
+	filesIndex    map[[32]byte]FileIndex
+	downloads     []chan DataReply
+	searchs       []chan SearchReply
+	tlcAcks       []chan TLCAck
+	searchMatches []string
+	mutexs        Mutexs
 }

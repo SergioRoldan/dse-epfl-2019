@@ -6,8 +6,8 @@ import (
 
 // Update a routing entry and print a DSDV message if the table will be updated
 func updateRoutingEntry(addr, origin string, gos *Gossiper, print bool) {
-	gos.routingMutex.Lock()
-	defer gos.routingMutex.Unlock()
+	gos.mutexs.routingMutex.Lock()
+	defer gos.mutexs.routingMutex.Unlock()
 	diff := gos.routingTable[origin] != addr
 
 	if diff {
@@ -31,7 +31,7 @@ func routeMessage(gos *Gossiper, ticker *time.Ticker) {
 // Send a new route rumor message
 func sendRumorMsg(gos *Gossiper) {
 	nID := 0
-	gos.statusMutex.Lock()
+	gos.mutexs.statusMutex.Lock()
 	for i, n := range gos.Status.Want {
 		if n.Identifier == gos.ID {
 			nID = i
@@ -46,7 +46,7 @@ func sendRumorMsg(gos *Gossiper) {
 	}
 
 	gos.Status.Want[nID].NextID++
-	gos.statusMutex.Unlock()
+	gos.mutexs.statusMutex.Unlock()
 
 	msg := &GossipPacket{Rumor: rmr}
 

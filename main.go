@@ -39,9 +39,11 @@ func printMessage(packedMsg GossipPacket, simpleMode, isClient bool, address str
 		}
 
 		//fmt.Println("STATUS from " + address + peers)
-	} else if packedMsg.Private != nil {
-		fmt.Println("PRIVATE origin " + packedMsg.Private.Origin + " hop-limit " + fmt.Sprint(packedMsg.Private.HopLimit) + " contents " + packedMsg.Private.Text)
 	}
+}
+
+func printPrivateMessage(packedMsg PrivateMessage) {
+	fmt.Println("PRIVATE origin " + packedMsg.Origin + " hop-limit " + fmt.Sprint(packedMsg.HopLimit) + " contents " + packedMsg.Text)
 }
 
 // Print mongering process started with peer
@@ -166,9 +168,9 @@ func sendMsgTo(peer string, msg *GossipPacket, gos Gossiper) {
 
 // Send status to a peer
 func sendStatusTo(peer string, gos Gossiper) {
-	gos.statusMutex.Lock()
+	gos.mutexs.statusMutex.Lock()
 	stts := &StatusPacket{Want: gos.Status.Want}
-	gos.statusMutex.Unlock()
+	gos.mutexs.statusMutex.Unlock()
 	msg := &GossipPacket{Status: stts}
 	sendMsgTo(peer, msg, gos)
 }
@@ -176,21 +178,32 @@ func sendStatusTo(peer string, gos Gossiper) {
 /* STORE MSG */
 
 // Store a message to ack in rumorsToAck list of gossiper
-func storeMsgToAck(gos *Gossiper, msg RumorMessage, addr string) {
+func storeMsgToAck(gos *Gossiper, msg GossipPacket, addr string) {
 	found := false
 
-	gos.rumorsToAckMutex.Lock()
+	var origin string
+	var id uint32
+
+	if msg.TLCMessage != nil {
+		origin = msg.TLCMessage.Origin
+		id = msg.TLCMessage.ID
+	} else {
+		origin = msg.Rumor.Origin
+		id = msg.Rumor.ID
+	}
+
+	gos.mutexs.rumorsToAckMutex.Lock()
 	for _, rumor := range gos.rumorsToAck[addr] {
-		if rumor.Origin == msg.Origin && rumor.ID == msg.ID {
+		if rumor.Origin == origin && rumor.ID == id {
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		gos.rumorsToAck[addr] = append(gos.rumorsToAck[addr], RumorAck{msg.Origin, msg.ID})
+		gos.rumorsToAck[addr] = append(gos.rumorsToAck[addr], RumorAck{origin, id})
 	}
-	gos.rumorsToAckMutex.Unlock()
+	gos.mutexs.rumorsToAckMutex.Unlock()
 }
 
 // Store an new acked message that has not flipped a coin yet
@@ -215,24 +228,24 @@ func storeAckedMessage(gos *Gossiper, msgs []RumorAck, addr string) {
 func storeNewMsg(gos *Gossiper, msg *GossipPacket, addr string) {
 	storeMsg(gos, *msg.Rumor)
 	printMessage(*msg, gos.simpleMode, false, addr)
-	gos.peersMutex.Lock()
+	gos.mutexs.peersMutex.Lock()
 	printPeers(gos.peers)
-	gos.peersMutex.Unlock()
+	gos.mutexs.peersMutex.Unlock()
 }
 
 // Store a message in gossiper list of rumors
 func storeMsg(gos *Gossiper, msg RumorMessage) {
-	gos.rumorsMutex.Lock()
+	gos.mutexs.rumorsMutex.Lock()
 	gos.rumors[msg.Origin] = append(gos.rumors[msg.Origin], msg)
-	gos.rumorsMutex.Unlock()
+	gos.mutexs.rumorsMutex.Unlock()
 }
 
 /* AUXILIAR FUNCTIONS */
 
 // Get a random peer of the peers list of the gossiper
 func randPeer(gos Gossiper) string {
-	gos.peersMutex.Lock()
-	defer gos.peersMutex.Unlock()
+	gos.mutexs.peersMutex.Lock()
+	defer gos.mutexs.peersMutex.Unlock()
 
 	peersArr := strings.Split(gos.peers, ",")
 	return peersArr[rand.Intn(len(peersArr))]
@@ -244,7 +257,7 @@ func randPeer(gos Gossiper) string {
 func rumormongering(gos *Gossiper, msg *GossipPacket, addr string) {
 	ticker := time.NewTicker(time.Duration(timeout) * time.Second)
 	go rumormongeringWorker(gos, msg, addr, ticker)
-	storeMsgToAck(gos, *msg.Rumor, addr)
+	storeMsgToAck(gos, *msg, addr)
 
 	printRumormongering(addr)
 	sendMsgTo(addr, msg, *gos)
@@ -258,15 +271,26 @@ func rumormongeringWorker(gos *Gossiper, msg *GossipPacket, addr string, ticker 
 		case <-ticker.C:
 			found := false
 
-			gos.rumorsToAckMutex.Lock()
+			var origin string
+			var id uint32
+
+			if msg.TLCMessage != nil {
+				origin = msg.TLCMessage.Origin
+				id = msg.TLCMessage.ID
+			} else {
+				origin = msg.Rumor.Origin
+				id = msg.Rumor.ID
+			}
+
+			gos.mutexs.rumorsToAckMutex.Lock()
 			for j, rumor := range gos.rumorsToAck[addr] {
-				if rumor.Origin == msg.Rumor.Origin && rumor.ID == msg.Rumor.ID {
+				if rumor.Origin == origin && rumor.ID == id {
 					found = true
 					gos.rumorsToAck[addr] = append(gos.rumorsToAck[addr][:j], gos.rumorsToAck[addr][j+1:]...)
 					break
 				}
 			}
-			gos.rumorsToAckMutex.Unlock()
+			gos.mutexs.rumorsToAckMutex.Unlock()
 
 			ticker.Stop()
 
@@ -308,7 +332,13 @@ func main() {
 	webclient := flag.Bool("webclient", false, "starts a web server to handle the request of a web client in the port UIPort")
 	timeoutFlag := flag.Int("rumongTimer", 10, "rumormongering timeout in seconds")
 	rtimer := flag.Int("rtimer", 0, "timeout in seconds to send route rumors. 0 (default) means disable sending route rumors.")
+	hw3ex2 := flag.Bool("hw3ex2", false, "gossiper is running in hw3 ex2 mode")
+	N := flag.Int("N", 0, "Total number of peers in the network")
+	stubbornTimeout := flag.Int("stubbornTimeout", 5, "The stubborn timeout")
+	hopLimit := flag.Uint("hopLimit", 10, "private messages hop limit")
 	flag.Parse()
+
+	fmt.Println(*hw3ex2, *stubbornTimeout)
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -316,7 +346,7 @@ func main() {
 	timeout = *timeoutFlag
 
 	// Create a new gossiper and its worker
-	gos := NewGossiper(*gossipAddr, *name, *peers, *simpleMode)
+	gos := NewGossiper(*gossipAddr, *name, *peers, *simpleMode, *N, *stubbornTimeout, *hopLimit)
 	if gos != nil {
 		go gossipWorker(gos)
 	}
