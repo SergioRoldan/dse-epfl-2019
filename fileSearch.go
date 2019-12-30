@@ -13,14 +13,20 @@ const MATCHTH = 2
 // MAXBUDGET maximum budget
 const MAXBUDGET = 32
 
+// Handles a duplicate search within 0.5 seconds
 func handleDuplicateSearch(gos *Gossiper, origin string, kwords []string) {
+	gos.mutexs.recentSearchsMutex.Lock()
 	gos.recentSearchs[origin] = append(gos.recentSearchs[origin], kwords)
+	gos.mutexs.recentSearchsMutex.Unlock()
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 
 	for {
 		select {
 		case <-ticker.C:
+			gos.mutexs.recentSearchsMutex.Lock()
+			defer gos.mutexs.recentSearchsMutex.Unlock()
+
 			for i, keywords := range gos.recentSearchs[origin] {
 				if reflect.DeepEqual(keywords, kwords) {
 					gos.recentSearchs[origin] = append(gos.recentSearchs[origin][:i], gos.recentSearchs[origin][i+1:]...)
@@ -33,6 +39,7 @@ func handleDuplicateSearch(gos *Gossiper, origin string, kwords []string) {
 	}
 }
 
+// Generates a new file search with the keywords specified
 func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan SearchReply) {
 
 	match := make(map[string]SearchMatch)
@@ -40,17 +47,19 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 	if budget == nil {
 		budg := 2
 		ticker := time.NewTicker(time.Second)
+		matches := make(map[string]bool)
 
 		for {
 			select {
 			case <-ticker.C:
 
+				//In case of timeout we double the budget til it reaches 32
 				if (budg * 2) == MAXBUDGET {
 					ticker.Stop()
 				}
 
 				budg *= 2
-				divideBudget(gos, uint64(budg), gos.ID, "", keywords)
+				divideBudget(gos, uint64(budg-1), gos.ID, "", keywords)
 
 			case searchReply := <-ch:
 				for _, searchResult := range searchReply.Results {
@@ -63,11 +72,12 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 						}
 					}
 
-					// In case the name does not contain at least one the keywords, the reply is for another node and we can skip this iteration
+					// In case the name does not contain at least one keyword, the reply is for another node and we can skip this iteration
 					if !fnd {
 						continue
 					}
 
+					// We generate the and fill the match acording to the chunks in the result
 					printMatchFound(gos, searchResult.FileName, searchReply.Origin, hex.EncodeToString(searchResult.MetafileHash), searchResult.ChunkMap)
 
 					if _, exist := match[searchResult.FileName]; !exist {
@@ -96,71 +106,51 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 
 					}
 
-					matches := 0
-
-					for _, v := range match {
-						if int(v.ChunkCount) == len(v.Chunks) {
-							matches++
-							gos.SearchResult[searchResult.FileName] = match[searchResult.FileName]
-						}
-					}
-
-					if matches >= MATCHTH {
-						//Stop the ticker
-
-						printSearchFinished()
-
-						ticker.Stop()
-						i := -1
-
-						// Remove the channel from the gossiper and return from the thread
-						for k, v := range gos.searchs {
-							if v == ch {
-								i = k
-							}
-						}
-
-						if i != -1 {
-							gos.searchs = append(gos.searchs[:i], gos.searchs[i+1:]...)
-						}
-
-						return
+					// If the match is a full match we indicate it
+					if int(match[searchResult.FileName].ChunkCount) == len(match[searchResult.FileName].Chunks) {
+						matches[searchResult.FileName] = true
+						gos.mutexs.searchResultMutex.Lock()
+						gos.SearchResult[searchResult.FileName] = match[searchResult.FileName]
+						gos.mutexs.searchResultMutex.Unlock()
 					}
 				}
+
+				// In case we have as many full matches as threshold we end the search
+				count := 0
+				for _, v := range matches {
+					if v {
+						count++
+					}
+				}
+
+				if count >= MATCHTH {
+					printSearchFinished()
+					deleteSearchChannel(gos, ticker, ch)
+					return
+				}
+
 			}
 
 		}
 	} else {
 
-		divideBudget(gos, uint64(*budget), gos.ID, "", keywords)
+		// Same case with a predefined budged
+		divideBudget(gos, uint64(*budget-1), gos.ID, "", keywords)
 
 		ticker := time.NewTicker(2 * time.Second)
+
+		matches := make(map[string]bool)
 
 		for {
 			select {
 			case <-ticker.C:
 
-				printSearchFinished()
-
-				ticker.Stop()
-				i := -1
-
-				// Remove the channel from the gossiper and return from the thread
-				for k, v := range gos.searchs {
-					if v == ch {
-						i = k
-					}
-				}
-
-				if i != -1 {
-					gos.searchs = append(gos.searchs[:i], gos.searchs[i+1:]...)
-				}
+				deleteSearchChannel(gos, ticker, ch)
 
 				return
 			case searchReply := <-ch:
 				for _, searchResult := range searchReply.Results {
 
-					// As multiple searches at the same time are possible we check if a reply is for the current thread checking if the name contains at least one of the keywords
 					fnd := false
 					for _, kw := range keywords {
 						if strings.Contains(searchResult.FileName, kw) {
@@ -169,7 +159,6 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 						}
 					}
 
-					// In case the name does not contain at least one the keywords, the reply is for another node and we can skip this iteration
 					if !fnd {
 						continue
 					}
@@ -202,12 +191,29 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 
 					}
 
-					for _, v := range match {
-						if int(v.ChunkCount) == len(v.Chunks) {
-							gos.SearchResult[searchResult.FileName] = match[searchResult.FileName]
-						}
+					if int(match[searchResult.FileName].ChunkCount) == len(match[searchResult.FileName].Chunks) {
+						matches[searchResult.FileName] = true
+						gos.mutexs.searchResultMutex.Lock()
+						gos.SearchResult[searchResult.FileName] = match[searchResult.FileName]
+						gos.mutexs.searchResultMutex.Unlock()
 					}
 
+				}
+
+				count := 0
+				for _, v := range matches {
+					if v {
+						count++
+					}
+				}
+
+				if count >= MATCHTH {
+
+					printSearchFinished()
+
+					deleteSearchChannel(gos, ticker, ch)
+
+					return
 				}
 			}
 
@@ -216,6 +222,7 @@ func newFileSearch(gos *Gossiper, keywords []string, budget *uint64, ch chan Sea
 	}
 }
 
+// Divide the budget between all the nodes (except the originator) equitatively
 func divideBudget(gos *Gossiper, budget uint64, origin, address string, keywords []string) {
 
 	peers := strings.Split(gos.peers, ",")
@@ -249,4 +256,26 @@ func divideBudget(gos *Gossiper, budget uint64, origin, address string, keywords
 			}
 		}
 	}
+}
+
+// Delete the search channel from the list to garbage collect it
+func deleteSearchChannel(gos *Gossiper, ticker *time.Ticker, ch chan SearchReply) {
+	ticker.Stop()
+	i := -1
+
+	gos.mutexs.searchsMutex.Lock()
+
+	for k, v := range gos.searchs {
+		if v == ch {
+			i = k
+		}
+	}
+
+	if i != -1 {
+		gos.searchs = append(gos.searchs[:i], gos.searchs[i+1:]...)
+	}
+
+	gos.mutexs.searchsMutex.Unlock()
+
+	return
 }

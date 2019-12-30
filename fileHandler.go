@@ -25,6 +25,9 @@ const CHUNKSIZE = 8192
 // SHASIZE size of the SHA digest
 const SHASIZE = 32
 
+// HOPLIMIT private messages limit
+const HOPLIMIT = 10
+
 // Index a new file
 func handleFileIndexing(gos *Gossiper, filename string) {
 
@@ -33,6 +36,7 @@ func handleFileIndexing(gos *Gossiper, filename string) {
 
 	if err != nil {
 		fmt.Println("File error: " + err.Error())
+		return
 	}
 
 	defer file.Close()
@@ -41,6 +45,7 @@ func handleFileIndexing(gos *Gossiper, filename string) {
 
 	if err != nil {
 		fmt.Println("Stats error: " + err.Error())
+		return
 	}
 
 	var hash []byte
@@ -88,12 +93,14 @@ func handleFileIndexing(gos *Gossiper, filename string) {
 
 	// Add the fileIndex to the gossiper list of indexed files
 	fileIndex := FileIndex{filename, fi.Size(), hash, sha256.Sum256(hash), chunkCount, chunkMap}
+
+	if gos.hw3.hw3ex2 || gos.hw3.hw3ex3 || gos.hw3.hw3ex4 {
+		listFile(gos, fileIndex.Name, fileIndex.Size, fileIndex.MetaHash[:])
+	}
+
 	gos.mutexs.filesIndexMutex.Lock()
 	gos.filesIndex[fileIndex.MetaHash] = fileIndex
 	gos.mutexs.filesIndexMutex.Unlock()
-
-	// Just for test reasons when dealing with new files
-	fmt.Println(hex.EncodeToString(fileIndex.MetaHash[:]))
 }
 
 // Download thread
@@ -114,7 +121,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 		rmr := &DataRequest{
 			Origin:      gos.ID,
 			Destination: *req.Destination,
-			HopLimit:    gos.hopLimit - 1,
+			HopLimit:    HOPLIMIT - 1,
 			HashValue:   *req.Request,
 		}
 
@@ -189,7 +196,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: *req.Destination,
-						HopLimit:    gos.hopLimit - 1,
+						HopLimit:    HOPLIMIT - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -264,7 +271,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: *req.Destination,
-						HopLimit:    gos.hopLimit - 1,
+						HopLimit:    HOPLIMIT - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -283,7 +290,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: *req.Destination,
-					HopLimit:    gos.hopLimit - 1,
+					HopLimit:    HOPLIMIT - 1,
 					HashValue:   *req.Request,
 				}
 
@@ -295,7 +302,7 @@ func handleFileDownload(gos *Gossiper, req Message, ch chan DataReply) {
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: *req.Destination,
-					HopLimit:    gos.hopLimit - 1,
+					HopLimit:    HOPLIMIT - 1,
 					HashValue:   chunkHash,
 				}
 
@@ -334,7 +341,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 		rmr := &DataRequest{
 			Origin:      gos.ID,
 			Destination: currentNode,
-			HopLimit:    gos.hopLimit - 1,
+			HopLimit:    HOPLIMIT - 1,
 			HashValue:   searchMatch.MetafileHash,
 		}
 
@@ -409,7 +416,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: currentNode,
-						HopLimit:    gos.hopLimit - 1,
+						HopLimit:    HOPLIMIT - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -490,7 +497,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 					rmr := &DataRequest{
 						Origin:      gos.ID,
 						Destination: currentNode,
-						HopLimit:    gos.hopLimit - 1,
+						HopLimit:    HOPLIMIT - 1,
 						HashValue:   chunkHash,
 					}
 
@@ -509,7 +516,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: currentNode,
-					HopLimit:    gos.hopLimit - 1,
+					HopLimit:    HOPLIMIT - 1,
 					HashValue:   searchMatch.MetafileHash,
 				}
 
@@ -521,7 +528,7 @@ func handleFileDownloadFromSearch(gos *Gossiper, searchMatch *SearchMatch, name 
 				rmr := &DataRequest{
 					Origin:      gos.ID,
 					Destination: currentNode,
-					HopLimit:    gos.hopLimit - 1,
+					HopLimit:    HOPLIMIT - 1,
 					HashValue:   chunkHash,
 				}
 

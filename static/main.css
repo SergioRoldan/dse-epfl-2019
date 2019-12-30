@@ -1,97 +1,133 @@
 /* Resets */
+
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
+
 .container {
     padding: 15px;
     min-height: 95vh;
 }
+
 form {
     margin: 30px 0px;
 }
+
+#peerID {
+    margin-right: 65%;
+    display: inline-block;
+}
+
 form:first-of-type {
     margin-top: 0px;
 }
+
 label {
     margin: 0;
     width: 100%;
 }
+
 h5 {
     display: inline;
 }
+
 h3 {
     font-size: 1.5rem;
 }
 
+
 /* Boostrap overwrite */
+
 .col-sm-7,
 .col-sm-5 {
     padding: 0px 25px;
 }
+
 .toast {
     margin-top: 20px;
     opacity: 1;
     margin-left: 50%;
     transform: translateX(-50%);
 }
+
 .row {
     min-height: 95vh;
 }
+
 .list-group {
     max-height: 10vh;
     overflow-y: auto;
     position: relative;
     height: 100%;
-    border: 1px solid rgba(0,0,0,.125);
+    border: 1px solid rgba(0, 0, 0, .125);
     border-radius: 0.25rem;
     margin-bottom: 1rem;
 }
+
 .list-group-item {
     border: none;
-    border-top: 1px solid rgba(0,0,0,.125);
-    border-bottom: 1px solid rgba(0,0,0,.125);
+    border-top: 1px solid rgba(0, 0, 0, .125);
+    border-bottom: 1px solid rgba(0, 0, 0, .125);
 }
+
+.container {
+    max-width: 1480px;
+}
+
 .list-group-item:first-child:not(:last-child) {
     border-radius: 0px;
     border-top: none;
 }
+
 .list-group-item:last-child {
     border-radius: 0px;
     border-bottom: none;
 }
+
+.searchedFiles .list-group-item:hover,
 .users .list-group-item:hover {
     background: #b2dfdb;
     cursor: pointer;
 }
+
 .alert {
     width: 100%;
 }
-h4.alert{
+
+h4.alert {
     margin-top: 15px;
 }
+
 .card-subtitle {
     margin-left: 10px;
 }
 
+
 /* Styles */
+
 .flex-column {
     display: flex;
     flex-direction: column;
 }
+
 .flex-item-1 {
     flex-grow: 1
 }
+
 .flex-item-2 {
     flex-grow: 2
 }
+
 .flex-item-3 {
     flex-grow: 4
 }
+
 .close {
     margin-left: 99%;
 }
+
 .privateBox,
 .messageBox {
     border-radius: 10px;
@@ -104,29 +140,34 @@ h4.alert{
     max-height: 17vh;
     position: relative;
 }
+
 .privateBox {
     min-height: 200px;
     margin-bottom: 15px;
 }
+
 .message {
     width: 75%;
     border-radius: 7px;
 }
+
 .message.mine {
     margin-left: 25%;
 }
+
 .modal {
     display: none;
-    position: fixed; 
+    position: fixed;
     z-index: 1;
     left: 0;
     top: 0;
-    width: 100%; 
+    width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgb(0,0,0); 
-    background-color: rgba(0,0,0,0.4);
+    background-color: rgb(0, 0, 0);
+    background-color: rgba(0, 0, 0, 0.4);
 }
+
 .modal-content {
     background-color: #fefefe;
     position: absolute;
@@ -137,12 +178,14 @@ h4.alert{
     border: 1px solid #888;
     width: 80%;
 }
+
 .close {
     color: #aaa;
     float: right;
     font-size: 28px;
     font-weight: bold;
 }
+
 .close:hover,
 .close:focus {
     color: black;
@@ -150,7 +193,9 @@ h4.alert{
     cursor: pointer;
 }
 
+
 /* perfectScrollbar overwrite */
+
 .ps__rail-y {
     margin-top: 5px;
     margin-bottom: 5px;

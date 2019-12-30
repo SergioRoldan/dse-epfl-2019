@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -29,7 +30,7 @@ func printMessage(packedMsg GossipPacket, simpleMode, isClient bool, address str
 		if isClient {
 			fmt.Println("CLIENT MESSAGE " + packedMsg.Rumor.Text)
 		} else {
-			fmt.Println("RUMOR origin " + packedMsg.Rumor.Origin + " from " + address + " ID " + fmt.Sprint(packedMsg.Rumor.ID) + " contents " + packedMsg.Rumor.Text)
+			//fmt.Println("RUMOR origin " + packedMsg.Rumor.Origin + " from " + address + " ID " + fmt.Sprint(packedMsg.Rumor.ID) + " contents " + packedMsg.Rumor.Text)
 		}
 	} else if packedMsg.Status != nil {
 		peers := ""
@@ -42,13 +43,34 @@ func printMessage(packedMsg GossipPacket, simpleMode, isClient bool, address str
 	}
 }
 
+func printConfirmedTLC(gos * Gossiper, tlcMessage TLCMessage) {
+	// maybe is ID not confirmed
+	str := "CONFIRMED GOSSIP origin " + tlcMessage.Origin +
+	" ID " + fmt.Sprint(tlcMessage.Confirmed) +
+	" file name " + tlcMessage.TxBlock.Transaction.Name +
+	" size " + fmt.Sprint(tlcMessage.TxBlock.Transaction.Size) +
+	" metahash " + hex.EncodeToString(tlcMessage.TxBlock.Transaction.MetafileHash);
+	fmt.Println(str)
+
+	gos.confirmedTLCs = append(gos.confirmedTLCs, str);
+	//save the confirmed tlc in an string list
+}
+
+func printUnconfirmedTLC(tlcMessage TLCMessage) {
+	fmt.Println("UNCONFIRMED GOSSIP origin " + tlcMessage.Origin +
+		" ID " + fmt.Sprint(tlcMessage.ID) +
+		" file name " + tlcMessage.TxBlock.Transaction.Name +
+		" size " + fmt.Sprint(tlcMessage.TxBlock.Transaction.Size) +
+		" metahash " + hex.EncodeToString(tlcMessage.TxBlock.Transaction.MetafileHash))
+}
+
 func printPrivateMessage(packedMsg PrivateMessage) {
 	fmt.Println("PRIVATE origin " + packedMsg.Origin + " hop-limit " + fmt.Sprint(packedMsg.HopLimit) + " contents " + packedMsg.Text)
 }
 
 // Print mongering process started with peer
 func printRumormongering(address string) {
-	fmt.Println("MONGERING with " + address)
+	//fmt.Println("MONGERING with " + address)
 }
 
 // Print routing table update
@@ -226,7 +248,7 @@ func storeAckedMessage(gos *Gossiper, msgs []RumorAck, addr string) {
 
 // Store a new message in gossiper and print message and peers
 func storeNewMsg(gos *Gossiper, msg *GossipPacket, addr string) {
-	storeMsg(gos, *msg.Rumor)
+	storeMsg(gos, *msg)
 	printMessage(*msg, gos.simpleMode, false, addr)
 	gos.mutexs.peersMutex.Lock()
 	printPeers(gos.peers)
@@ -234,9 +256,17 @@ func storeNewMsg(gos *Gossiper, msg *GossipPacket, addr string) {
 }
 
 // Store a message in gossiper list of rumors
-func storeMsg(gos *Gossiper, msg RumorMessage) {
+func storeMsg(gos *Gossiper, msg GossipPacket) {
+	var origin string
+
+	if msg.TLCMessage != nil {
+		origin = msg.TLCMessage.Origin
+	} else {
+		origin = msg.Rumor.Origin
+	}
+
 	gos.mutexs.rumorsMutex.Lock()
-	gos.rumors[msg.Origin] = append(gos.rumors[msg.Origin], msg)
+	gos.rumors[origin] = append(gos.rumors[origin], msg)
 	gos.mutexs.rumorsMutex.Unlock()
 }
 
@@ -333,12 +363,13 @@ func main() {
 	timeoutFlag := flag.Int("rumongTimer", 10, "rumormongering timeout in seconds")
 	rtimer := flag.Int("rtimer", 0, "timeout in seconds to send route rumors. 0 (default) means disable sending route rumors.")
 	hw3ex2 := flag.Bool("hw3ex2", false, "gossiper is running in hw3 ex2 mode")
+	hw3ex3 := flag.Bool("hw3ex3", false, "gossiper is running in hw3 ex3 mode")
+	hw3ex4 := flag.Bool("hw3ex4", false, "gossiper is running in hw3 ex3 mode")
+	ackAll := flag.Bool("ackAll", false, "acknowledge every message independently of it ID")
 	N := flag.Int("N", 0, "Total number of peers in the network")
 	stubbornTimeout := flag.Int("stubbornTimeout", 5, "The stubborn timeout")
 	hopLimit := flag.Uint("hopLimit", 10, "private messages hop limit")
 	flag.Parse()
-
-	fmt.Println(*hw3ex2, *stubbornTimeout)
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -346,7 +377,12 @@ func main() {
 	timeout = *timeoutFlag
 
 	// Create a new gossiper and its worker
-	gos := NewGossiper(*gossipAddr, *name, *peers, *simpleMode, *N, *stubbornTimeout, *hopLimit)
+	gos := NewGossiper(*gossipAddr, *name, *peers, *simpleMode, *hw3ex2, *hw3ex3, *hw3ex4, *ackAll, *N, *stubbornTimeout, *hopLimit)
+
+	if *hw3ex4 {
+		gos.blocks = append(gos.blocks, TLCMessage{})
+	}
+
 	if gos != nil {
 		go gossipWorker(gos)
 	}

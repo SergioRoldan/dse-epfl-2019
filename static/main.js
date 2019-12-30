@@ -10,6 +10,7 @@ $(document).ready(function() {
     const ps4 = new PerfectScrollbar('.list-group.peers');
     const ps5 = new PerfectScrollbar('.list-group.searchedMatches');
     const ps6 = new PerfectScrollbar('.list-group.searchedFiles');
+    const ps7 = new PerfectScrollbar('.list-group.confirms');
 
     // Interval for private messages
     var refreshIntervalId;
@@ -47,7 +48,6 @@ $(document).ready(function() {
 
 
     $(".searchedFiles").on("dblclick", ".list-group-item", function(e) {
-
         tgt = $(e.target).text().split(" and hash ")
 
         var download = {
@@ -57,7 +57,7 @@ $(document).ready(function() {
         };
 
         $.ajax({
-            url: actionurl + 'download',
+            url: window.location.href + "download",
             type: 'post',
             data: JSON.stringify(download),
             success: function(data, textStatus, request) {
@@ -170,10 +170,10 @@ $(document).ready(function() {
         });
 
         if (budget == "") {
-            budget = "0"
+            budget = 0
         }
 
-        if (tmp_keywords.length != 0 && /^[1-9]\d*$/g.test(budget)) {
+        if (tmp_keywords.length != 0 && /^[0-9]\d*$/g.test(budget)) {
             var search = {
                 Keywords: tmp_keywords.join(","),
                 Budget: budget
@@ -320,6 +320,9 @@ $(document).ready(function() {
     getUsers();
     getSearchedFiles();
     getSearchMatches();
+    getConfirmedMessage();
+    getRound();
+    getConsensusMessage();
 
     // Get new peersters, addresses and messages each two seconds
     setInterval(() => {
@@ -328,6 +331,9 @@ $(document).ready(function() {
         getUsers();
         getSearchedFiles();
         getSearchMatches();
+        getConfirmedMessage();
+        getRound();
+        getConsensusMessage();
     }, 2000);
 
 })
@@ -337,7 +343,6 @@ function getSearchMatches() {
         url: window.location.href + "search",
         type: 'get',
         success: function(data) {
-            console.log(data)
 
             if (data.SearchMatches == null) {
                 return
@@ -356,19 +361,39 @@ function getSearchMatches() {
     });
 }
 
+function getRound() {
+    $.ajax({
+        url: window.location.href + "round",
+        type: 'get',
+        success: function(data) {
+            $("#roundID").text(data.Round)
+            advances = data.Advances;
+
+            if (advances == null)
+                return
+
+            advances.forEach(function(advance) {
+                if ($(".list-group.confirms .list-group-item").text().indexOf(advance) == -1) {
+                    $("<li class=\"list-group-item\">" + advance + "</li>").prependTo(".list-group.confirms")
+                    $(".list-group.confirms").scrollTop($(".list-group.confirms")[0].scrollHeight);
+                }
+            });
+        }
+    });
+}
+
 function getSearchedFiles() {
     $.ajax({
         url: window.location.href + "fileSearched",
         type: 'get',
         success: function(data) {
-            console.log(data)
 
             if (data.FileSearched == null) {
                 return
             }
-            data.FileSearched.forEach(function(fSearched) {
-                if ($(".list-group.searchedFiles .list-group-item").text().indexOf(fSearched.MetafileHash) == -1) {
-                    $("<li class=\"list-group-item\">File with name " + fSearched.FileName + " and hash " + fSearched.MetafileHash + "</li>").prependTo(".list-group.searchedFiles")
+            data.FileSearched.forEach(function(fSearched, index) {
+                if ($(".list-group.searchedFiles .list-group-item").text().indexOf(data.Hashes[index]) == -1) {
+                    $("<li class=\"list-group-item\">File with name " + fSearched.FileName + " and hash " + data.Hashes[index] + "</li>").prependTo(".list-group.searchedFiles")
                     $(".list-group.searchedFiles").scrollTop($(".list-group.searchedFiles")[0].scrollHeight);
                 }
             })
@@ -433,6 +458,48 @@ function getUsers() {
     });
 }
 
+function getConfirmedMessage() {
+    $.ajax({
+        url: window.location.href + "confirmed",
+        type: 'get',
+        success: function(data) {
+            if (data.Confirmeds == null) {
+                return
+            }
+
+            confirms = data.Confirmeds;
+
+            confirms.forEach(function(confirm) {
+                if ($(".list-group.confirms .list-group-item").text().indexOf(confirm) == -1) {
+                    $("<li class=\"list-group-item\">" + confirm + "</li>").prependTo(".list-group.confirms")
+                    $(".list-group.confirms").scrollTop($(".list-group.confirms")[0].scrollHeight);
+                }
+            });
+        }
+    });
+}
+
+function getConsensusMessage() {
+    $.ajax({
+        url: window.location.href + "consensus",
+        type: 'get',
+        success: function(data) {
+            if (data.Consensus == null) {
+                return
+            }
+
+            consensus = data.Consensus;
+
+            consensus.forEach(function(cons) {
+                if ($(".list-group.confirms .list-group-item").text().indexOf(cons) == -1) {
+                    $("<li class=\"list-group-item\">" + cons + "</li>").prependTo(".list-group.confirms")
+                    $(".list-group.confirms").scrollTop($(".list-group.confirms")[0].scrollHeight);
+                }
+            });
+        }
+    });
+}
+
 // Get the messages and if its new add it to the list
 function getMessages() {
     $.ajax({
@@ -473,6 +540,8 @@ function getMessages() {
 
                     let lastID = 0;
                     rumors[node].forEach(function(rumor) {
+                            rum = rumor.Rumor;
+
                             if (rumor.Text == "")
                                 return
 
@@ -489,10 +558,12 @@ function getMessages() {
                         // If node is new add all messages
                 } else {
                     rumors[node].forEach(function(rumor) {
-                        if (rumor.Text == "")
+                        rum = rumor.Rumor;
+
+                        if (rum == null || rum.Text == "")
                             return
 
-                        let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">" + rumor.Origin + "</h5><h5 class=\"card-subtitle mb-2 text-muted\">" + rumor.ID + "</h5><p class=\"card-text\">" + rumor.Text + "</p></div></div>").appendTo(".messageBox")
+                        let newmsg = $("<div class=\"card message\"><div class=\"card-body\"><h5 class=\"card-title\">" + rum.Origin + "</h5><h5 class=\"card-subtitle mb-2 text-muted\">" + rum.ID + "</h5><p class=\"card-text\">" + rum.Text + "</p></div></div>").appendTo(".messageBox")
                             // Check if message is originaly from me
                         if (node == $("#peerID").text())
                             newmsg.addClass("mine")

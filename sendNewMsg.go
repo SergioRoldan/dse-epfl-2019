@@ -43,10 +43,13 @@ func sendNewRumorMessage(gos *Gossiper, text string, tlcMessage *TLCMessage) {
 		msg.Rumor = rmr
 
 		printMessage(*msg, gos.simpleMode, true, "")
-		storeMsg(gos, *msg.Rumor)
+		storeMsg(gos, *msg)
 	} else {
 		tlcMessage.ID = nextID
 		msg.TLCMessage = tlcMessage
+
+		printMessage(*msg, gos.simpleMode, true, "")
+		storeMsg(gos, *msg)
 	}
 
 	rndPeer := randPeer(*gos)
@@ -55,6 +58,7 @@ func sendNewRumorMessage(gos *Gossiper, text string, tlcMessage *TLCMessage) {
 	}
 }
 
+// Send new acknowledgement for a TLC Message
 func sendNewTLCAck(gos *Gossiper, tlcAck *TLCAck) {
 	msg := &GossipPacket{Ack: tlcAck}
 
@@ -76,7 +80,7 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 		ID:          0,
 		Text:        text,
 		Destination: destination,
-		HopLimit:    gos.hopLimit,
+		HopLimit:    HOPLIMIT,
 	}
 
 	msg := &GossipPacket{Private: rmr}
@@ -104,6 +108,7 @@ func sendNewPrivateMessage(gos *Gossiper, text string, destination string) {
 	}
 }
 
+// Send a new search reply to a search request
 func sendNewSearchReply(gos *Gossiper, searchReply *SearchReply) {
 	msg := &GossipPacket{SearchReply: searchReply}
 
@@ -118,6 +123,7 @@ func sendNewSearchReply(gos *Gossiper, searchReply *SearchReply) {
 	}
 }
 
+// Forwards a search request
 func forwardSearchRequest(gos *Gossiper, origin, addr string, keywords []string, budget uint64) {
 	srch := &SearchRequest{
 		Origin:   origin,

@@ -102,7 +102,7 @@ type SearchMatch struct {
 type TLCMessage struct {
 	Origin      string
 	ID          uint32
-	Confirmed   bool
+	Confirmed   int
 	TxBlock     BlockPublish
 	VectorClock *StatusPacket //(used in Exercise 3, for now nil)
 	Fitness     float32       //(used in Exercise 4, for now 0)
@@ -132,11 +132,24 @@ type NodesResponse struct {
 }
 
 type MessagesResponse struct {
-	Rumors map[string][]RumorMessage
+	Rumors map[string][]GossipPacket
+}
+
+type RoundResponse struct {
+	Round    int
+	Advances []string
 }
 
 type SearchMatchResponse struct {
 	SearchMatches []string
+}
+
+type ConsensusResponse struct {
+	Consensus []string
+}
+
+type ConfirmedTLCResponse struct {
+	Confirmeds []string
 }
 
 type PrivateResponse struct {
@@ -145,6 +158,7 @@ type PrivateResponse struct {
 
 type FileSearchedResponse struct {
 	FileSearched []SearchMatch
+	Hashes []string
 }
 
 type RumorAck struct {
@@ -162,38 +176,66 @@ type FileIndex struct {
 }
 
 type Mutexs struct {
-	peersMutex       *sync.Mutex
-	rumorsToAckMutex *sync.Mutex
-	statusMutex      *sync.Mutex
-	rumorsMutex      *sync.Mutex
-	routingMutex     *sync.Mutex
-	filesIndexMutex  *sync.Mutex
-	privateMutex     *sync.Mutex
-	downloadsMutex   *sync.Mutex
+	peersMutex          *sync.Mutex
+	rumorsToAckMutex    *sync.Mutex
+	statusMutex         *sync.Mutex
+	rumorsMutex         *sync.Mutex
+	routingMutex        *sync.Mutex
+	filesIndexMutex     *sync.Mutex
+	privateMutex        *sync.Mutex
+	downloadsMutex      *sync.Mutex
+	searchsMutex        *sync.Mutex
+	recentSearchsMutex  *sync.Mutex
+	searchResultMutex   *sync.Mutex
+	blocksMutex         *sync.Mutex
+	gossipWithConfMutex *sync.Mutex
+	tlcAcksMutex        *sync.Mutex
+	tlcMessagesMutex    *sync.Mutex
+}
+
+type hw3 struct {
+	hw3ex2       bool
+	hw3ex3       bool
+	hw3ex4       bool
+	ackAll       bool
+	N            int
+	stubbornTout int
+	hopLimit     uint32
+}
+
+type gossipWithConfChannel struct {
+	round uint32
+	ch    chan int
 }
 
 type Gossiper struct {
-	address       *net.UDPAddr
-	conn          *net.UDPConn
-	Name          string
-	peers         string
-	ID            string
-	Status        StatusPacket
-	simpleMode    bool
-	N             int
-	stubbornTout  int
-	hopLimit      uint32
-	rumors        map[string][]RumorMessage
-	rumorsToAck   map[string][]RumorAck
-	rumorsAcked   map[string][]RumorAck
-	private       map[string][]PrivateMessage
-	recentSearchs map[string][][]string
-	routingTable  map[string]string
-	SearchResult  map[string]SearchMatch
-	filesIndex    map[[32]byte]FileIndex
-	downloads     []chan DataReply
-	searchs       []chan SearchReply
-	tlcAcks       []chan TLCAck
-	searchMatches []string
-	mutexs        Mutexs
+	address        *net.UDPAddr
+	conn           *net.UDPConn
+	myTime         *uint32
+	Name           string
+	ID             string
+	peers          string
+	simpleMode     bool
+	hw3            hw3
+	Status         StatusPacket
+	mutexs         Mutexs
+	routingTable   map[string]string
+	SearchResult   map[string]SearchMatch
+	rumors         map[string][]GossipPacket
+	rumorsToAck    map[string][]RumorAck
+	rumorsAcked    map[string][]RumorAck
+	private        map[string][]PrivateMessage
+	tlcMessages    map[string][]TLCMessage
+	unconfirmedTLC map[string][]TLCMessage
+	recentSearchs  map[string][][]string
+	filesIndex     map[[32]byte]FileIndex
+	searchMatches  []string
+	roundAdvances  []string
+	confirmedTLCs  []string
+	consensusOn	   []string
+	downloads      []chan DataReply
+	searchs        []chan SearchReply
+	tlcAcks        []chan TLCAck
+	blocks         []TLCMessage
+	gossipWithConf []gossipWithConfChannel
 }

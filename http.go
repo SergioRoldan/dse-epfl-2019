@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // DIR base directory of static files
@@ -89,7 +90,6 @@ func messageHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 	if r.Method == "GET" {
 		gos.mutexs.rumorsMutex.Lock()
 		messages := MessagesResponse{gos.rumors}
-
 		gos.mutexs.rumorsMutex.Unlock()
 
 		js, err := json.Marshal(messages)
@@ -257,9 +257,39 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 	}
 }
 
+func confirmedHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
+	if r.Method == "GET" {
+		res := ConfirmedTLCResponse{gos.confirmedTLCs}
+
+		js, err := json.Marshal(res)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	}
+}
+
+func consensusHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
+	if r.Method == "GET" {
+		res := ConsensusResponse{gos.consensusOn}
+
+		js, err := json.Marshal(res)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	}
+}
+
 // search handler
 func searchHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
-	//
+	// Iniciate a search
 	if r.Method == "POST" {
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -293,6 +323,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("200 OK"))
+		// Return the current matches
 	} else if r.Method == "GET" {
 
 		searchMatches := SearchMatchResponse{gos.searchMatches}
@@ -310,16 +341,19 @@ func searchHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 // search handler
 func fileSearchedHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
-	//
+	// Return the search result
 	if r.Method == "GET" {
 
 		var searchMatchRes []SearchMatch
+		var searchMatchHash []string
 
 		for _, v := range gos.SearchResult {
 			searchMatchRes = append(searchMatchRes, v)
+			searchMatchHash = append(searchMatchHash, hex.EncodeToString(v.MetafileHash))
 		}
 
-		fileSearched := FileSearchedResponse{searchMatchRes}
+		fileSearched := FileSearchedResponse{searchMatchRes, searchMatchHash}
+
 
 		js, err := json.Marshal(fileSearched)
 		if err != nil {
@@ -372,6 +406,27 @@ func usersHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
 
 }
 
+// Round handler
+func roundHandler(w http.ResponseWriter, r *http.Request, gos *Gossiper) {
+	// Return the current round
+	if r.Method == "GET" {
+
+		messages := RoundResponse{
+			Round:    int(atomic.LoadUint32(gos.myTime)),
+			Advances: gos.roundAdvances,
+		}
+
+		js, err := json.Marshal(messages)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	}
+}
+
 // Web server handlers and startup
 func webserver(gos *Gossiper, UIPort string) {
 	mux := http.NewServeMux()
@@ -390,6 +445,9 @@ func webserver(gos *Gossiper, UIPort string) {
 	mux.HandleFunc("/id", func(w http.ResponseWriter, r *http.Request) {
 		idHandler(w, r, gos)
 	})
+	mux.HandleFunc("/round", func(w http.ResponseWriter, r *http.Request) {
+		roundHandler(w, r, gos)
+	})
 	mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
 		uploadHandler(w, r, gos)
 	})
@@ -401,6 +459,12 @@ func webserver(gos *Gossiper, UIPort string) {
 	})
 	mux.HandleFunc("/fileSearched", func(w http.ResponseWriter, r *http.Request) {
 		fileSearchedHandler(w, r, gos)
+	})
+	mux.HandleFunc("/confirmed", func(w http.ResponseWriter, r *http.Request) {
+		confirmedHandler(w, r, gos)
+	})
+	mux.HandleFunc("/consensus", func(w http.ResponseWriter, r *http.Request) {
+		consensusHandler(w, r, gos)
 	})
 	mux.Handle("/", http.FileServer(http.Dir(DIR)))
 

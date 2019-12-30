@@ -13,4 +13,5 @@ Files in the root folder:
     structs.go: File containing the shared structs of the gossiper
     routing.go: File with functions to handle routing messages
     sendNewMsg.go: File with functions to handle the transmissions of different messages
-    
+    fileSearch.go: File with the functions to handle a search request
+    blockchain.go: File with the functions that correspond to the hw3 from ex 2 to 4

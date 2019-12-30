@@ -50,7 +50,7 @@ func sendRumorMsg(gos *Gossiper) {
 
 	msg := &GossipPacket{Rumor: rmr}
 
-	storeMsg(gos, *msg.Rumor)
+	storeMsg(gos, *msg)
 
 	rndPeer := randPeer(*gos)
 	if rndPeer != "" {

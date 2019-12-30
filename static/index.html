@@ -12,7 +12,7 @@
 <body>
     <div class="container">
         <div class="row">
-            <div class="col-sm-7">
+            <div class="col-sm-6">
                 <form id="uploadForm">
                     <h3 class="alert alert-secondary">Upload File</h3>
                     <input id="file" type="file" class="btn btn-outline-primary" />
@@ -56,9 +56,9 @@
                 </form>
 
             </div>
-            <div class="col-sm-5 flex-column">
+            <div class="col-sm-6 flex-column">
                 <div>
-                    <h3 class="alert alert-secondary">Peer ID: <span id="peerID"></span></h3>
+                    <h3 class="alert alert-secondary">Peer ID: <span id="peerID"></span> Round: <span id="roundID"></span></h3>
                 </div>
                 <div>
                     <h3 class="alert" id="processID"></h3>
@@ -70,6 +70,9 @@
                 <h3 class="alert alert-secondary">Download searched file:</h3>
                 <p>Double click a file to download it</p>
                 <ul class="list-group searchedFiles">
+                </ul>
+                <h3 class="alert alert-secondary">Confirmed TLCs</h3>
+                <ul class="list-group confirms">
                 </ul>
                 <h3 class="alert alert-secondary">Direct Message with:</h3>
                 <p>Double click a peer to interact privately with it</p>
