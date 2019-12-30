@@ -1,4 +1,7 @@
+# Peerter DSE EPFL Fall 2019
+
 Folder structure:
+    
     ./_Dowloads: Contains the downloaded files
     ./_SharedFiles: Contains the local files to be indexed
         ./_IndexedFilesChunks: Auxiliary folder to store all the chunks of indexed files for efficiency reasons during download. This file could be emptied each time the gossiper restarts because all the files should be indexed again. It's a tradeoff between space (files are stored twice) and speed to serve files (we only need to read each chunk not the whole file every time)
@@ -6,6 +9,7 @@ Folder structure:
     ./static: Contains the GUI (html, js, css and favicon)
 
 Files in the root folder:
+    
     main.go: Main file with the call to the gossiperHandler and clientHandler threads
     fileHandler.go: File with functions to handle the indexing and download of files
     gossiper.go: File with functions to handle the client and gossiper connections
